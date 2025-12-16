@@ -1,0 +1,27 @@
+<IfModule mod_headers.c>
+    # Always revalidate the entry HTML so clients pick up latest asset URLs
+    <FilesMatch "\.(html)$">
+        Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
+    </FilesMatch>
+
+    # Ensure the version file is always fresh (used for cache-busting)
+    <Files "version.json">
+        Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
+    </Files>
+
+    # JSON should not be cached (questions.json, etc.)
+    <FilesMatch "\.(json)$">
+        Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
+    </FilesMatch>
+
+    # Static assets can be cached aggressively because we load them with a version querystring
+    <FilesMatch "\.(css|js|svg|png|jpg|jpeg|gif|webp|ico)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+</IfModule>

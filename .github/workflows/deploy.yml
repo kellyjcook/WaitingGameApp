@@ -1,0 +1,34 @@
+name: Deploy via SSH (rsync)
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install sshpass
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass
+
+      - name: Sync files to server
+        env:
+          SSHPASS: ${{ secrets.DEPLOY_PASSWORD }}
+        run: |
+          if [ -z "$DEPLOY_PATH" ]; then
+            echo "DEPLOY_PATH secret is not set. Please set it in GitHub repo secrets." >&2
+            exit 1
+          fi
+          sshpass -e rsync -avz --delete \
+            --exclude ".git" \
+            --exclude ".github" \
+            -e "ssh -o StrictHostKeyChecking=no" \
+            ./ \
+            kellyjcook@iad1-shared-b8-15.dreamhost.com:$DEPLOY_PATH

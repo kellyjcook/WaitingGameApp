@@ -419,21 +419,33 @@ function evaluateRound() {
     const answeredPlayersInOrder = answered.map(r => r.player);
     const nonAnsweredPlayers = gameState.players.filter(p => !answeredPlayersInOrder.includes(p));
     const displayOrder = [...answeredPlayersInOrder, ...nonAnsweredPlayers];
-    const lines = displayOrder.map(p => `${p.name}: +${roundPoints.get(p)} (Total ${p.score % 1 === 0 ? p.score : p.score.toFixed(1)})`);
-    const msg = `${header}\n\nRound points and totals:\n` + lines.join('\n');
-    resultText.textContent = msg;
+
+    // Header-only in result text
+    resultText.textContent = header;
 
     // Update scoreboard
     updateScores();
 
-    // Populate compact results table (only first and second groups)
+    // Populate results table with per-round results: Rank, Player, +Round, Total
     if (resultTable) {
-        const header = `<tr><th>Rank</th><th>Player</th><th>Score</th></tr>`;
-        const standings = [...gameState.players].sort((a, b) => b.score - a.score);
-        const rows = standings
-            .map((p, idx) => `<tr><td>${idx + 1}</td><td>${p.name}</td><td>${p.score % 1 === 0 ? p.score : p.score.toFixed(1)}</td></tr>`)
+        // Build rank map from groups (ties share the same rank)
+        const rankMap = new Map();
+        let currentRank = 1;
+        groups.forEach(group => {
+            group.forEach(r => rankMap.set(r.player, currentRank));
+            currentRank += group.length;
+        });
+
+        const headerHtml = `<tr><th>Rank</th><th>Player</th><th>+Round</th><th>Total</th></tr>`;
+        const rows = displayOrder
+            .map(p => {
+                const rank = rankMap.has(p) ? rankMap.get(p) : '-';
+                const round = roundPoints.get(p) || 0;
+                const total = p.score % 1 === 0 ? p.score : p.score.toFixed(1);
+                return `<tr><td>${rank}</td><td>${p.name}</td><td>${round}</td><td>${total}</td></tr>`;
+            })
             .join('');
-        resultTable.innerHTML = header + rows;
+        resultTable.innerHTML = headerHtml + rows;
     }
 
     // Disable buttons till next

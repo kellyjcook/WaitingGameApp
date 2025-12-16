@@ -319,6 +319,20 @@ button:active {
     background: #fff;
 }
 
+.names-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    flex: 1;
+}
+
+.names-grid input[type="text"] {
+    padding: 10px 12px;
+    border: 1px solid #dadce0;
+    border-radius: 8px;
+    font-size: 1rem;
+}
+
 /* iPad specific optimizations */
 @media (max-width: 1024px) {
     h1 {

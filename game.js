@@ -28,6 +28,7 @@ const resultTable = document.getElementById('result-table');
 const nextBtn = document.getElementById('next-btn');
 const waitingOverlay = document.getElementById('waiting-overlay');
 const versionBadge = document.getElementById('version-badge');
+const playerNamesContainer = document.getElementById('player-names');
 
 // Render \n as line breaks in result text
 resultText.classList.add('nl-preline');
@@ -115,9 +116,18 @@ async function initGameFromConfig() {
     // Render players dynamically
     playersContainer.innerHTML = '';
     for (let i = 1; i <= gameState.playerCount; i++) {
+        // Resolve player name from config inputs (max 25 chars), fallback to default
+        let resolvedName = `Player ${i}`;
+        if (playerNamesContainer) {
+            const input = document.getElementById(`player-name-${i}`);
+            if (input) {
+                const v = (input.value || '').trim().slice(0, 25);
+                if (v.length > 0) resolvedName = v;
+            }
+        }
         const player = {
             id: i,
-            name: `Player ${i}`,
+            name: resolvedName,
             score: 0,
             startTime: null,
             answerSeconds: null,
@@ -563,3 +573,31 @@ window.addEventListener('resize', () => {
 
 // Kick off version badge load on startup
 loadVersionBadge();
+
+// Render player name inputs according to selected player count
+function renderPlayerNameInputs() {
+    if (!playerNamesContainer) return;
+    const count = parseInt(playerCountSelect.value, 10) || 0;
+    // Preserve existing values when re-rendering
+    const existing = new Map();
+    Array.from(playerNamesContainer.querySelectorAll('input[type="text"]')).forEach(inp => {
+        existing.set(inp.id, inp.value);
+    });
+    playerNamesContainer.innerHTML = '';
+    for (let i = 1; i <= count; i++) {
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.id = `player-name-${i}`;
+        inp.maxLength = 25;
+        inp.placeholder = `Player ${i}`;
+        if (existing.has(inp.id)) inp.value = existing.get(inp.id);
+        playerNamesContainer.appendChild(inp);
+    }
+}
+
+// Update inputs when player count changes
+if (playerCountSelect) {
+    playerCountSelect.addEventListener('change', renderPlayerNameInputs);
+}
+// Initial render on load
+renderPlayerNameInputs();

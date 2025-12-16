@@ -18,7 +18,11 @@ const configScreen = document.getElementById('config-screen');
 const gameScreen = document.getElementById('game-screen');
 const startBtn = document.getElementById('start-btn');
 const playerCountSelect = document.getElementById('player-count');
-const roundCountSelect = document.getElementById('round-count');
+
+//eliminate rounds and make questions continuous
+//const roundCountSelect = document.getElementById('round-count');
+const roundCountSelect = 1000
+
 const questionElement = document.getElementById('question');
 const timerElement = document.getElementById('timer');
 const playersContainer = document.getElementById('players-container');
@@ -551,7 +555,7 @@ function layoutPlayers() {
     // Base radius on the longest dimension so spacing uses as much perimeter as possible
     // Keep buttons within ~0.5 inches of the edge using CSS 96px/inch
     const INCH_PX = 96;
-    const edgeInsetPx = Math.round(0.5 * INCH_PX);
+    const edgeInsetPx = Math.round(0.25 * INCH_PX);
     const buttonRadius = buttonSize / 2;
     const radius = Math.max(0, Math.max(cx, cy) - buttonRadius - edgeInsetPx);
     const n = gameState.players.length;

@@ -176,15 +176,16 @@ async function initGameFromConfig() {
         buttonEl.style.backgroundColor = bg;
         buttonEl.style.color = idealTextColor(bg);
 
-        const scoreEl = document.createElement('div');
-        scoreEl.className = 'score';
-        scoreEl.innerHTML = `Score: <span>0</span>`;
+        //Removed score from player button
+        //const scoreEl = document.createElement('div');
+        //scoreEl.className = 'score';
+        //scoreEl.innerHTML = `Score: <span>0</span>`;
 
         playerEl.appendChild(buttonEl);
-        playerEl.appendChild(scoreEl);
+        //playerEl.appendChild(scoreEl);
         playersContainer.appendChild(playerEl);
 
-        //Removed score from player button
+
         //player.elements = { root: playerEl, button: buttonEl, scoreValue: scoreEl.querySelector('span') };
         player.elements = { root: playerEl, button: buttonEl };
 
@@ -522,7 +523,7 @@ function evaluateRound() {
 
 function updateScores() {
     gameState.players.forEach(p => {
-        p.elements.scoreValue.textContent = `${p.score % 1 === 0 ? p.score : p.score.toFixed(1)}`;
+        //p.elements.scoreValue.textContent = `${p.score % 1 === 0 ? p.score : p.score.toFixed(1)}`;
     });
 }
 

@@ -416,36 +416,35 @@ function evaluateRound() {
     }
 
     // Order: answering players by rank, then non-answers (0 pts)
+    /*
     const answeredPlayersInOrder = answered.map(r => r.player);
     const nonAnsweredPlayers = gameState.players.filter(p => !answeredPlayersInOrder.includes(p));
     const displayOrder = [...answeredPlayersInOrder, ...nonAnsweredPlayers];
-
-    // Header-only in result text
+    const lines = displayOrder.map(p => `${p.name}: +${roundPoints.get(p)} (Total ${p.score % 1 === 0 ? p.score : p.score.toFixed(1)})`);
+    const msg = `${header}\n\nRound points and totals:\n` + lines.join('\n');
+    resultText.textContent = msg;
+    */
     resultText.textContent = header;
-
     // Update scoreboard
     updateScores();
 
-    // Populate results table with per-round results: Rank, Player, +Round, Total
+    // Populate compact results table (overall standings) with per-round details
     if (resultTable) {
-        // Build rank map from groups (ties share the same rank)
-        const rankMap = new Map();
-        let currentRank = 1;
-        groups.forEach(group => {
-            group.forEach(r => rankMap.set(r.player, currentRank));
-            currentRank += group.length;
-        });
+        // Build a player -> diff map for this round (seconds off)
+        const diffMap = new Map();
+        answered.forEach(r => diffMap.set(r.player, r.diff));
 
-        const headerHtml = `<tr><th>Rank</th><th>Player</th><th>+Round</th><th>Total</th></tr>`;
-        const rows = displayOrder
-            .map(p => {
-                const rank = rankMap.has(p) ? rankMap.get(p) : '-';
-                const round = roundPoints.get(p) || 0;
+        const header = `<tr><th>Rank</th><th>Player</th><th>Round</th><th>Time</th><th>Total</th></tr>`;
+        const standings = [...gameState.players].sort((a, b) => b.score - a.score);
+        const rows = standings
+            .map((p, idx) => {
+                const round = (roundPoints.get(p) || 0);
+                const timeOff = diffMap.has(p) ? diffMap.get(p).toFixed(1) : '-';
                 const total = p.score % 1 === 0 ? p.score : p.score.toFixed(1);
-                return `<tr><td>${rank}</td><td>${p.name}</td><td>${round}</td><td>${total}</td></tr>`;
+                return `<tr><td>${idx + 1}</td><td>${p.name}</td><td>${round}</td><td>${timeOff}</td><td>${total}</td></tr>`;
             })
             .join('');
-        resultTable.innerHTML = headerHtml + rows;
+        resultTable.innerHTML = header + rows;
     }
 
     // Disable buttons till next

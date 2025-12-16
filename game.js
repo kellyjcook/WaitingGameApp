@@ -193,7 +193,8 @@ function showQuestion() {
     }
 
     gameState.currentQuestion = gameState.questions[gameState.questionIndex];
-    questionElement.textContent = `Round ${gameState.currentRound} of ${gameState.totalRounds}: ${gameState.currentQuestion.question}`;
+    //questionElement.textContent = `Round ${gameState.currentRound} of ${gameState.totalRounds}: ${gameState.currentQuestion.question}`;
+    questionElement.textContent = `${gameState.currentQuestion.question}`;
 
     // Reset player states and UI
     resultElement.classList.add('hidden');
@@ -433,11 +434,11 @@ function evaluateRound() {
         header = `Correct answer: ${correct}\nNo valid answers.`;
     } else if (secondGroup.length === 0) {
         const firstPts = N; // top group points
-        header = `Correct answer: ${correct}\n${firstNames.join(', ')} win${firstNames.length > 1 ? '' : 's'} this round! (${firstPts} pts)`;
+        header = `Correct answer: ${correct}\n${firstNames.join(', ')} win${firstNames.length > 1 ? '' : 's'} this round!`;
     } else {
         const firstPts = N;
         const secondPts = Math.max(0, N - firstGroup.length);
-        header = `Correct answer: ${correct}\n${firstNames.join(', ')} win${firstNames.length > 1 ? '' : 's'} this round! (${firstPts} pts)\nSecond: ${secondNames.join(', ')} (${secondPts} pts)`;
+        header = `Correct answer: ${correct}\n${firstNames.join(', ')} win${firstNames.length > 1 ? '' : 's'} this round!`;
     }
 
     // Order: answering players by rank, then non-answers (0 pts)
@@ -466,7 +467,7 @@ function evaluateRound() {
                 const round = (roundPoints.get(p) || 0);
                 const timeOff = diffMap.has(p) ? diffMap.get(p).toFixed(1) : '-';
                 //const total = p.score % 1 === 0 ? p.score : p.score.toFixed(1);
-                return `<tr><td>${idx + 1}</td><td>${p.name}</td><td>${round}</td><td>${timeOff}</td></tr>`;
+                return `<tr><td>${idx + 1}</td><td>${p.name}</td><td align=center>${round}</td><td>${timeOff}</td></tr>`;
             })
             .join('');
         resultTable.innerHTML = header + rows;

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+  <defs>
+    <g id="clock" stroke="#99a1a7" stroke-width="6" fill="none" stroke-linecap="round">
+      <circle cx="0" cy="0" r="70" fill="#ffffff" stroke-width="8"/>
+      <!-- ticks -->
+      <g stroke-width="4">
+        <line x1="0" y1="-60" x2="0" y2="-70"/>
+        <line x1="0" y1="60" x2="0" y2="70"/>
+        <line x1="60" y1="0" x2="70" y2="0"/>
+        <line x1="-60" y1="0" x2="-70" y2="0"/>
+      </g>
+      <!-- hands -->
+      <line x1="0" y1="0" x2="0" y2="-45"/>
+      <line x1="0" y1="0" x2="35" y2="0"/>
+      <circle cx="0" cy="0" r="4" fill="#99a1a7" stroke="none"/>
+    </g>
+
+    <g id="watch" stroke="#99a1a7" stroke-width="5" fill="none" stroke-linecap="round">
+      <rect x="-55" y="-80" width="110" height="160" rx="18" ry="18" fill="#ffffff" stroke-width="7"/>
+      <circle cx="0" cy="0" r="40"/>
+      <line x1="0" y1="0" x2="0" y2="-28"/>
+      <line x1="0" y1="0" x2="22" y2="0"/>
+    </g>
+
+    <g id="hourglass" stroke="#99a1a7" stroke-width="6" fill="none" stroke-linecap="round">
+      <path d="M-40 -70 H40 C35 -40 15 -20 0 0 C15 20 35 40 40 70 H-40 C-35 40 -15 20 0 0 C-15 -20 -35 -40 -40 -70 Z" fill="#ffffff" stroke-width="7"/>
+    </g>
+  </defs>
+
+  <rect width="1200" height="800" fill="#f5f7fa"/>
+
+  <!-- scatter collage -->
+  <g opacity="0.9">
+    <use href="#clock" x="150" y="140" />
+    <use href="#watch" x="360" y="120" transform="rotate(12 360 120)" />
+    <use href="#hourglass" x="580" y="160" transform="rotate(-8 580 160)" />
+    <use href="#clock" x="820" y="130" transform="rotate(25 820 130)" />
+    <use href="#watch" x="1040" y="150" transform="rotate(-18 1040 150)" />
+
+    <use href="#hourglass" x="220" y="360" transform="rotate(10 220 360)" />
+    <use href="#clock" x="450" y="360" transform="rotate(-15 450 360)" />
+    <use href="#watch" x="700" y="360" transform="rotate(7 700 360)" />
+    <use href="#clock" x="960" y="360" transform="rotate(-22 960 360)" />
+
+    <use href="#watch" x="160" y="600" transform="rotate(-10 160 600)" />
+    <use href="#hourglass" x="420" y="620" transform="rotate(20 420 620)" />
+    <use href="#clock" x="680" y="600" transform="rotate(-5 680 600)" />
+    <use href="#watch" x="940" y="620" transform="rotate(12 940 620)" />
+  </g>
+
+  <!-- subtle overlay grid of tiny clocks -->
+  <g opacity="0.25">
+    <g transform="translate(0,0)">
+      <use href="#clock" x="100" y="260" transform="scale(0.6)"/>
+      <use href="#clock" x="300" y="260" transform="scale(0.6)"/>
+      <use href="#clock" x="500" y="260" transform="scale(0.6)"/>
+      <use href="#clock" x="700" y="260" transform="scale(0.6)"/>
+      <use href="#clock" x="900" y="260" transform="scale(0.6)"/>
+      <use href="#clock" x="1100" y="260" transform="scale(0.6)"/>
+    </g>
+  </g>
+</svg>

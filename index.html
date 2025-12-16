@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WaitingGameAlpha</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div id="config-screen" class="screen">
+            <h1>Welcome to WaitingGameAlpha</h1>
+            <p>Test your knowledge and timing skills!</p>
+            <div class="config">
+                <div class="config-row">
+                    <label for="player-count">Players</label>
+                    <select id="player-count">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                        <option value="8">8</option>
+                    </select>
+                </div>
+                <div class="config-row">
+                    <label for="round-count">Rounds</label>
+                    <select id="round-count">
+                        <option value="5">3</option>
+                        <option value="8">3</option>
+                        <option value="13" selected>5</option>
+                        <option value="21">7</option>
+                        <option value="34">10</option>
+                    </select>
+                </div>
+                <button id="start-btn">Start Game</button>
+            </div>
+            <div class="instructions" >
+                <h3>How to Play:</h3>
+                <p>1. Read the question carefully</p>
+                <p>2. Each player holds down their button</p>
+                <p>3. Release after the number of seconds equal to the answer</p>
+                <p>4. Closest player wins the round!</p>
+            </div>
+        </div>
+
+        <div id="game-screen" class="screen hidden">
+            <div id="center-container">
+                <div id="question-container">
+                    <h2 id="question"></h2>
+                    <div id="timer">3</div>
+                </div>
+                <div id="result" class="hidden">
+                    <h3 id="result-text"></h3>
+                    <div id="result-table-container">
+                        <table id="result-table"></table>
+                    </div>
+                    <button id="next-btn">Next Question</button>
+                </div>
+            </div>
+
+            <div id="players-container">
+                <!-- Players will be injected here dynamically -->
+            </div>
+            <div id="waiting-overlay" class="hidden">WAITING</div>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>

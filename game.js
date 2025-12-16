@@ -10,130 +10,7 @@ const gameState = {
     roundTimeoutId: null,
     questionIndex: 0,
     isCountdownRunning: false,
-    questions: [
-        { question: "How many sides does a triangle have?", answer: 3 },
-        { question: "How many colors are in a standard traffic light?", answer: 3 },
-        { question: "How many continents are there in the world?", answer: 7 },
-        { question: "How many days are there in a week?", answer: 7 },
-        { question: "How many legs does a spider have?", answer: 8 },
-        { question: "How many players on a basketball team on the court?", answer: 5 },
-        { question: "How many strings does a standard guitar have?", answer: 6 },
-        { question: "How many years are in a decade?", answer: 10 },
-        { question: "How many sides does a hexagon have?", answer: 6 },
-        { question: "How many planets are recognized in our solar system?", answer: 8 },
-        { question: "How many months have 28 days?", answer: 12 },
-        { question: "How many hours are in a day?", answer: 24 },
-        { question: "How many vowels are in the English alphabet?", answer: 5 },
-        { question: "How many letters are in the word 'cat'?", answer: 3 },
-        { question: "How many seasons are there in a year?", answer: 4 },
-
-        // Easy (33)
-        { question: "How many fingers on one hand?", answer: 5 },
-        { question: "How many toes on one foot?", answer: 5 },
-        { question: "How many sides does a square have?", answer: 4 },
-        { question: "How many corners does a rectangle have?", answer: 4 },
-        { question: "How many wheels are on a tricycle?", answer: 3 },
-        { question: "How many months are in a year?", answer: 12 },
-        { question: "How many days are in a weekend?", answer: 2 },
-        { question: "How many letters are in the word 'dog'?", answer: 3 },
-        { question: "How many primary colors are in light (RGB)?", answer: 3 },
-        { question: "How many primary colors are in paint (RYB)?", answer: 3 },
-        { question: "How many points does a triangle have?", answer: 3 },
-        { question: "How many sides does a rectangle have?", answer: 4 },
-        { question: "How many even numbers are between 1 and 5 (exclusive)?", answer: 2 },
-        { question: "How many eyes does a typical human have?", answer: 2 },
-        { question: "How many ears does a typical human have?", answer: 2 },
-        { question: "How many primary compass directions are there?", answer: 4 },
-        { question: "How many quarters make a dollar?", answer: 4 },
-        { question: "How many seasons are in 'The Four Seasons'?", answer: 4 },
-        { question: "How many legs does a cat have?", answer: 4 },
-        { question: "How many letters are in the word 'sun'?", answer: 3 },
-        { question: "How many letters are in the word 'moon'?", answer: 4 },
-        { question: "How many days are in February in a non-leap year?", answer: 28 },
-        { question: "How many days are in February in a leap year?", answer: 29 },
-        { question: "How many corners does a triangle have?", answer: 3 },
-        { question: "How many sides does a pentagon have?", answer: 5 },
-        { question: "How many sides does an octagon have?", answer: 8 },
-        { question: "How many colors are in a rainbow?", answer: 7 },
-        { question: "How many letters are in the word 'apple'?", answer: 5 },
-        { question: "How many letters are in the word 'hello'?", answer: 5 },
-        { question: "How many minutes are in half an hour?", answer: 30 },
-        { question: "How many lines are in a haiku?", answer: 3 },
-        { question: "How many strikes make an out in baseball?", answer: 3 },
-        { question: "How many points is a field goal worth in American football?", answer: 3 },
-
-        // Moderate (33)
-        { question: "How many Great Lakes are there?", answer: 5 },
-        { question: "How many players are on a soccer team on the field?", answer: 11 },
-        { question: "How many players are on a baseball team on the field?", answer: 9 },
-        { question: "How many months have 30 days?", answer: 4 },
-        { question: "How many prime numbers are less than 20?", answer: 8 },
-        { question: "How many letters are in the Greek alphabet?", answer: 24 },
-        { question: "How many edges does a cube have?", answer: 12 },
-        { question: "How many faces does a cube have?", answer: 6 },
-        { question: "How many vertices does a cube have?", answer: 8 },
-        { question: "How many sides does a dodecagon have?", answer: 12 },
-        { question: "How many zodiac signs are there?", answer: 12 },
-        { question: "How many hours are on a standard analog clock face?", answer: 12 },
-        { question: "How many pawns does each player have in chess?", answer: 8 },
-        { question: "How many squares are on one side of a chessboard?", answer: 8 },
-        { question: "How many provinces are in Canada?", answer: 10 },
-        { question: "How many amendments are in the U.S. Bill of Rights?", answer: 10 },
-        { question: "How many gas giant planets are in our solar system?", answer: 4 },
-        { question: "How many strings does a violin have?", answer: 4 },
-        { question: "How many symphonies did Beethoven compose?", answer: 9 },
-        { question: "How many keys are in a musical octave (Western)?", answer: 12 },
-        { question: "How many cranial nerves are there?", answer: 12 },
-        { question: "How many carpal bones are in one human wrist?", answer: 8 },
-        { question: "How many colors are on the flag of the United States?", answer: 3 },
-        { question: "How many stripes are on the flag of the United States?", answer: 13 },
-        { question: "How many original American colonies were there?", answer: 13 },
-        { question: "How many amendments does the U.S. Constitution have?", answer: 27 },
-        { question: "How many member countries are in the European Union (2024)?", answer: 27 },
-        { question: "How many letters are in the English alphabet?", answer: 26 },
-        { question: "How many Olympic rings are there?", answer: 5 },
-        { question: "How many continents border the Atlantic Ocean?", answer: 4 },
-        { question: "How many bones are in the human middle and inner ear (ossicles)?", answer: 6 },
-        { question: "How many sides does a heptagon have?", answer: 7 },
-        { question: "How many protons are in a carbon atom?", answer: 6 },
-
-        // Difficult (34)
-        { question: "How many SI base units are there?", answer: 7 },
-        { question: "How many Wonders of the Ancient World were there?", answer: 7 },
-        { question: "How many traditional lunar phases are named?", answer: 8 },
-        { question: "How many players are on a rugby union team on the field?", answer: 15 },
-        { question: "How many lines are in a Shakespearean sonnet?", answer: 14 },
-        { question: "How many Nobel Prize categories are awarded each year?", answer: 6 },
-        { question: "How many official languages does the United Nations have?", answer: 6 },
-        { question: "How many cervical vertebrae are in the human neck?", answer: 7 },
-        { question: "How many planets were known to ancient astronomers?", answer: 5 },
-        { question: "How many Pandava brothers are in the Mahabharata?", answer: 5 },
-        { question: "How many books are in the Pentateuch?", answer: 5 },
-        { question: "How many Gospels are in the New Testament?", answer: 4 },
-        { question: "How many letters are in the Hebrew alphabet?", answer: 22 },
-        { question: "How many letters are in the Arabic alphabet?", answer: 28 },
-        { question: "How many major scales are there in Western music?", answer: 12 },
-        { question: "How many teams are in a FIFA World Cup group?", answer: 4 },
-        { question: "How many players are on a volleyball team on the court?", answer: 6 },
-        { question: "How many squares are on a 4x4 grid?", answer: 16 },
-        { question: "How many justices sit on the U.S. Supreme Court?", answer: 9 },
-        { question: "How many apostles did Jesus have?", answer: 12 },
-        { question: "How many labors did Hercules complete?", answer: 12 },
-        { question: "How many animals are in the Chinese zodiac?", answer: 12 },
-        { question: "How many events are in the Olympic decathlon?", answer: 10 },
-        { question: "How many players are in a basketball starting lineup (one team)?", answer: 5 },
-        { question: "How many cards are in a single suit in a standard deck?", answer: 13 },
-        { question: "How many face cards are in a standard deck of cards?", answer: 12 },
-        { question: "How many days are in September?", answer: 30 },
-        { question: "How many minutes are in a quarter hour?", answer: 15 },
-        { question: "How many semitones are in a perfect fifth?", answer: 7 },
-        { question: "How many bones form the human thoracic vertebrae?", answer: 12 },
-        { question: "How many edges does a regular tetrahedron have?", answer: 6 },
-        { question: "How many faces does a regular octahedron have?", answer: 8 },
-        { question: "How many corners (vertices) does a regular dodecahedron have?", answer: 20 },
-        { question: "How many sides does a nonagon have?", answer: 9 },
-
-    ]
+    questions: []
 };
 
 // DOM Elements
@@ -198,7 +75,7 @@ function resetPlayersRuntimeState() {
 }
 
 // Initialize game with config
-function initGameFromConfig() {
+async function initGameFromConfig() {
     gameState.playerCount = parseInt(playerCountSelect.value, 10);
     gameState.totalRounds = parseInt(roundCountSelect.value, 10);
     gameState.currentRound = 1;
@@ -206,6 +83,15 @@ function initGameFromConfig() {
     gameState.players = [];
 
     // Prepare questions
+    if (!gameState.questions || gameState.questions.length === 0) {
+        try {
+            const res = await fetch('questions.json', { cache: 'no-store' });
+            const data = await res.json();
+            gameState.questions = Array.isArray(data) ? data : [];
+        } catch (e) {
+            gameState.questions = [];
+        }
+    }
     gameState.questions = shuffleArray([...gameState.questions]);
 
     // Render players dynamically
@@ -580,10 +466,10 @@ function endGame() {
 }
 
 // Event Listeners
-startBtn.addEventListener('click', () => {
+startBtn.addEventListener('click', async () => {
     configScreen.classList.add('hidden');
     gameScreen.classList.remove('hidden');
-    initGameFromConfig();
+    await initGameFromConfig();
 });
 
 nextBtn.addEventListener('click', () => {

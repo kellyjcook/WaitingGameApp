@@ -53,6 +53,16 @@ async function loadVersionBadge() {
         const ts = data && (data.timestamp || data.ts || data.date);
         if (ts) {
             versionBadge.textContent = ts;
+            // Apply cache-busting to styles.css using this timestamp
+            const link = document.querySelector('link[rel="stylesheet"][href$="styles.css"]');
+            if (link) {
+                const base = 'styles.css';
+                const newHref = `${base}?v=${encodeURIComponent(ts)}`;
+                // Only update if different to avoid unnecessary reloads
+                if (!link.href.endsWith(newHref)) {
+                    link.href = newHref;
+                }
+            }
         }
     } catch (_) {
         // ignore; badge will remain empty if not available (e.g., local dev)

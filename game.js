@@ -474,10 +474,16 @@ function evaluateRound() {
     // Scoring: descending points to all who answered.
     // Top group gets N points (N = number of answered), next gets N - groupSize(previous), etc.
     const N = answered.length;
+    // Track per-player round points
+    const roundPoints = new Map();
+    gameState.players.forEach(p => roundPoints.set(p, 0));
     let rankIndex = 0; // counts how many players are ahead (used to compute points)
     groups.forEach(group => {
         const points = Math.max(0, N - rankIndex);
-        group.forEach(r => { r.player.score += points; });
+        group.forEach(r => {
+            r.player.score += points;
+            roundPoints.set(r.player, (roundPoints.get(r.player) || 0) + points);
+        });
         rankIndex += group.length;
     });
 
@@ -490,20 +496,27 @@ function evaluateRound() {
         }
     });
 
-    // Results message (show first and second groups with dynamic points)
+    // Results message: show all players' round points and cumulative totals
     const firstNames = firstGroup.map(r => r.player.name);
     const secondNames = secondGroup.map(r => r.player.name);
-    let msg;
+    let header;
     if (firstGroup.length === 0) {
-        msg = `Correct answer: ${correct}\nNo valid answers.`;
+        header = `Correct answer: ${correct}\nNo valid answers.`;
     } else if (secondGroup.length === 0) {
         const firstPts = N; // top group points
-        msg = `Correct answer: ${correct}\n${firstNames.join(', ')} win${firstNames.length > 1 ? '' : 's'} this round! (${firstPts} pts)`;
+        header = `Correct answer: ${correct}\n${firstNames.join(', ')} win${firstNames.length > 1 ? '' : 's'} this round! (${firstPts} pts)`;
     } else {
         const firstPts = N;
         const secondPts = Math.max(0, N - firstGroup.length);
-        msg = `Correct answer: ${correct}\n${firstNames.join(', ')} win${firstNames.length > 1 ? '' : 's'} this round! (${firstPts} pts)\nSecond: ${secondNames.join(', ')} (${secondPts} pts)`;
+        header = `Correct answer: ${correct}\n${firstNames.join(', ')} win${firstNames.length > 1 ? '' : 's'} this round! (${firstPts} pts)\nSecond: ${secondNames.join(', ')} (${secondPts} pts)`;
     }
+
+    // Order: answering players by rank, then non-answers (0 pts)
+    const answeredPlayersInOrder = answered.map(r => r.player);
+    const nonAnsweredPlayers = gameState.players.filter(p => !answeredPlayersInOrder.includes(p));
+    const displayOrder = [...answeredPlayersInOrder, ...nonAnsweredPlayers];
+    const lines = displayOrder.map(p => `${p.name}: +${roundPoints.get(p)} (Total ${p.score % 1 === 0 ? p.score : p.score.toFixed(1)})`);
+    const msg = `${header}\n\nRound points and totals:\n` + lines.join('\n');
     resultText.textContent = msg;
 
     // Update scoreboard

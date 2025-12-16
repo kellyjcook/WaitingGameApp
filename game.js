@@ -21,7 +21,7 @@ const playerCountSelect = document.getElementById('player-count');
 
 //eliminate rounds and make questions continuous
 //const roundCountSelect = document.getElementById('round-count');
-const roundCountSelect = 1000
+
 
 const questionElement = document.getElementById('question');
 const timerElement = document.getElementById('timer');
@@ -110,7 +110,8 @@ function resetPlayersRuntimeState() {
 // Initialize game with config
 async function initGameFromConfig() {
     gameState.playerCount = parseInt(playerCountSelect.value, 10);
-    gameState.totalRounds = parseInt(roundCountSelect.value, 10);
+    //gameState.totalRounds = parseInt(roundCountSelect.value, 10);
+    gameState.totalRounds = 1000;
     gameState.currentRound = 1;
     gameState.questionIndex = 0;
     gameState.players = [];

@@ -454,14 +454,14 @@ function evaluateRound() {
         const diffMap = new Map();
         answered.forEach(r => diffMap.set(r.player, r.diff));
 
-        const header = `<tr><th>Rank</th><th>Player</th><th>Round</th><th>Time</th><th>Total</th></tr>`;
+        const header = `<tr><th align=center>Rank</th><th>Player</th><th align=center>Points</th><th>Time</th></tr>`;
         const standings = [...gameState.players].sort((a, b) => b.score - a.score);
         const rows = standings
             .map((p, idx) => {
                 const round = (roundPoints.get(p) || 0);
                 const timeOff = diffMap.has(p) ? diffMap.get(p).toFixed(1) : '-';
-                const total = p.score % 1 === 0 ? p.score : p.score.toFixed(1);
-                return `<tr><td>${idx + 1}</td><td>${p.name}</td><td>${round}</td><td>${timeOff}</td><td>${total}</td></tr>`;
+                //const total = p.score % 1 === 0 ? p.score : p.score.toFixed(1);
+                return `<tr><td>${idx + 1}</td><td>${p.name}</td><td>${round}</td><td>${timeOff}</td></tr>`;
             })
             .join('');
         resultTable.innerHTML = header + rows;

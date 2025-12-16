@@ -107,6 +107,20 @@ function resetPlayersRuntimeState() {
     });
 }
 
+function clamp(n, min, max) {
+    return Math.max(min, Math.min(max, n));
+}
+
+function setPlayerPositionFromClient(p, clientX, clientY) {
+    const rect = playersContainer.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    const nx = rect.width > 0 ? (x / rect.width) : 0.5;
+    const ny = rect.height > 0 ? (y / rect.height) : 0.5;
+    p.customPos = { x: clamp(nx, 0, 1), y: clamp(ny, 0, 1) };
+    layoutPlayers();
+}
+
 // Initialize game with config
 async function initGameFromConfig() {
     gameState.playerCount = parseInt(playerCountSelect.value, 10);
@@ -239,30 +253,51 @@ function beginHoldToStart() {
         const btn = p.elements.button;
         btn.style.pointerEvents = 'auto';
 
-        const onReadyStart = (e) => {
+        const onReadyPointerDown = (e) => {
             if (e.cancelable) e.preventDefault();
             p.isHolding = true;
             btn.classList.add('active');
+            p._holdingPointerId = e.pointerId;
+            try { btn.setPointerCapture(e.pointerId); } catch (_) {}
+            setPlayerPositionFromClient(p, e.clientX, e.clientY);
             checkAllHoldingAndMaybeStart();
         };
-        const onReadyEnd = (e) => {
+
+        const onReadyPointerMove = (e) => {
+            if (!p.isHolding) return;
+            if (p._holdingPointerId !== e.pointerId) return;
+            if (e.cancelable) e.preventDefault();
+            setPlayerPositionFromClient(p, e.clientX, e.clientY);
+        };
+
+        const onReadyPointerUp = (e) => {
+            if (p._holdingPointerId !== e.pointerId) return;
             if (e.cancelable) e.preventDefault();
             p.isHolding = false;
             btn.classList.remove('active');
-            // If someone lets go during countdown, cancel and wait again
+            p._holdingPointerId = null;
             if (gameState.isCountdownRunning) {
                 cancelCountdownAndResumeHold();
             }
         };
 
-        // store so we can remove later
-        p._readyListeners = { onReadyStart, onReadyEnd };
+        const onReadyPointerCancel = (e) => {
+            if (p._holdingPointerId !== e.pointerId) return;
+            if (e.cancelable) e.preventDefault();
+            p.isHolding = false;
+            btn.classList.remove('active');
+            p._holdingPointerId = null;
+            if (gameState.isCountdownRunning) {
+                cancelCountdownAndResumeHold();
+            }
+        };
 
-        btn.addEventListener('touchstart', onReadyStart, { passive: false });
-        btn.addEventListener('touchend', onReadyEnd, { passive: false });
-        btn.addEventListener('mousedown', onReadyStart);
-        btn.addEventListener('mouseup', onReadyEnd);
-        btn.addEventListener('mouseleave', onReadyEnd);
+        p._readyListeners = { onReadyPointerDown, onReadyPointerMove, onReadyPointerUp, onReadyPointerCancel };
+
+        btn.addEventListener('pointerdown', onReadyPointerDown, { passive: false });
+        btn.addEventListener('pointermove', onReadyPointerMove, { passive: false });
+        btn.addEventListener('pointerup', onReadyPointerUp, { passive: false });
+        btn.addEventListener('pointercancel', onReadyPointerCancel, { passive: false });
     });
 }
 
@@ -270,12 +305,11 @@ function cleanupReadyListeners() {
     gameState.players.forEach(p => {
         const btn = p.elements.button;
         if (p._readyListeners) {
-            const { onReadyStart, onReadyEnd } = p._readyListeners;
-            btn.removeEventListener('touchstart', onReadyStart);
-            btn.removeEventListener('touchend', onReadyEnd);
-            btn.removeEventListener('mousedown', onReadyStart);
-            btn.removeEventListener('mouseup', onReadyEnd);
-            btn.removeEventListener('mouseleave', onReadyEnd);
+            const { onReadyPointerDown, onReadyPointerMove, onReadyPointerUp, onReadyPointerCancel } = p._readyListeners;
+            btn.removeEventListener('pointerdown', onReadyPointerDown);
+            btn.removeEventListener('pointermove', onReadyPointerMove);
+            btn.removeEventListener('pointerup', onReadyPointerUp);
+            btn.removeEventListener('pointercancel', onReadyPointerCancel);
             delete p._readyListeners;
         }
     });
@@ -564,9 +598,16 @@ function layoutPlayers() {
     if (n === 0) return;
 
     gameState.players.forEach((p, idx) => {
-        const angle = (idx / n) * Math.PI * 2 - Math.PI / 2; // start at top
-        let x = cx + radius * Math.cos(angle);
-        let y = cy + radius * Math.sin(angle);
+        let x;
+        let y;
+        if (p.customPos && typeof p.customPos.x === 'number' && typeof p.customPos.y === 'number') {
+            x = rect.width * p.customPos.x;
+            y = rect.height * p.customPos.y;
+        } else {
+            const angle = (idx / n) * Math.PI * 2 - Math.PI / 2; // start at top
+            x = cx + radius * Math.cos(angle);
+            y = cy + radius * Math.sin(angle);
+        }
 
         // Clamp to keep fully inside the visible playersContainer
         const minX = buttonRadius + edgeInsetPx;
@@ -577,6 +618,11 @@ function layoutPlayers() {
         if (x > maxX) x = maxX;
         if (y < minY) y = minY;
         if (y > maxY) y = maxY;
+
+        if (p.customPos && rect.width > 0 && rect.height > 0) {
+            p.customPos.x = clamp(x / rect.width, 0, 1);
+            p.customPos.y = clamp(y / rect.height, 0, 1);
+        }
 
         p.elements.root.style.left = `${x}px`;
         p.elements.root.style.top = `${y}px`;

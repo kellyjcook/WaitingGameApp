@@ -27,6 +27,7 @@ const resultText = document.getElementById('result-text');
 const resultTable = document.getElementById('result-table');
 const nextBtn = document.getElementById('next-btn');
 const waitingOverlay = document.getElementById('waiting-overlay');
+const versionBadge = document.getElementById('version-badge');
 
 // Render \n as line breaks in result text
 resultText.classList.add('nl-preline');
@@ -38,6 +39,23 @@ function shuffleArray(array) {
         [array[i], array[j]] = [array[j], array[i]];
     }
     return array;
+}
+
+// Load and render version badge from version.json (latest commit timestamp)
+async function loadVersionBadge() {
+    if (!versionBadge) return;
+    try {
+        const res = await fetch('version.json', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        // Expecting { timestamp: "ISO-8601" }
+        const ts = data && (data.timestamp || data.ts || data.date);
+        if (ts) {
+            versionBadge.textContent = ts;
+        }
+    } catch (_) {
+        // ignore; badge will remain empty if not available (e.g., local dev)
+    }
 }
 
 // Questions are embedded in gameState.questions
@@ -531,3 +549,6 @@ function layoutPlayers() {
 window.addEventListener('resize', () => {
     layoutPlayers();
 });
+
+// Kick off version badge load on startup
+loadVersionBadge();

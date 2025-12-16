@@ -9,7 +9,7 @@
 <body>
     <div class="container">
         <div id="config-screen" class="screen">
-            <h1>Welcome to WaitingGameAlpha</h1>
+            <h1>Welcome to The Waiting Game</h1>
             <p>Test your knowledge and timing skills!</p>
             <div class="config">
                 <div class="config-row">
@@ -28,11 +28,11 @@
                 <div class="config-row">
                     <label for="round-count">Rounds</label>
                     <select id="round-count">
-                        <option value="5">3</option>
-                        <option value="8">3</option>
-                        <option value="13" selected>5</option>
-                        <option value="21">7</option>
-                        <option value="34">10</option>
+                        <option value="3">3</option>
+                        <option value="8">8</option>
+                        <option value="13" selected>13</option>
+                        <option value="21">21</option>
+                        <option value="34">34</option>
                     </select>
                 </div>
                 <button id="start-btn">Start Game</button>
@@ -68,6 +68,7 @@
         </div>
     </div>
 
+    <div id="version-badge" aria-label="version" title="Build version"></div>
     <script src="game.js"></script>
 </body>
 </html>

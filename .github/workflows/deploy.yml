@@ -18,6 +18,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y sshpass
 
+      - name: Create version.json (latest commit timestamp)
+        run: |
+          TS=$(git log -1 --format=%cI || date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "{\"timestamp\":\"$TS\"}" > version.json
+
       - name: Sync files to server
         env:
           SSHPASS: ${{ secrets.DEPLOY_PASSWORD }}

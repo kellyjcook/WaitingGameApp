@@ -1,9 +1,7 @@
-// Game state (supports 2–8 players and configurable rounds)
+// Game state (supports 2–8 players, endless mode)
 const gameState = {
-    players: [], // [{id, name, score, startTime, answerSeconds, elements}]
+    players: [], // [{id, name, startTime, answerSeconds, elements}]
     currentQuestion: null,
-    currentRound: 1,
-    totalRounds: 5,
     playerCount: 2,
     countdown: 5,
     countdownInterval: null,
@@ -18,7 +16,6 @@ const configScreen = document.getElementById('config-screen');
 const gameScreen = document.getElementById('game-screen');
 const startBtn = document.getElementById('start-btn');
 const playerCountSelect = document.getElementById('player-count');
-const roundCountSelect = document.getElementById('round-count');
 const questionElement = document.getElementById('question');
 const timerElement = document.getElementById('timer');
 const playersContainer = document.getElementById('players-container');
@@ -106,8 +103,6 @@ function resetPlayersRuntimeState() {
 // Initialize game with config
 async function initGameFromConfig() {
     gameState.playerCount = parseInt(playerCountSelect.value, 10);
-    gameState.totalRounds = parseInt(roundCountSelect.value, 10);
-    gameState.currentRound = 1;
     gameState.questionIndex = 0;
     gameState.players = [];
 
@@ -138,7 +133,6 @@ async function initGameFromConfig() {
         const player = {
             id: i,
             name: resolvedName,
-            score: 0,
             startTime: null,
             answerSeconds: null,
             elements: {}
@@ -157,30 +151,19 @@ async function initGameFromConfig() {
         buttonEl.style.backgroundColor = bg;
         buttonEl.style.color = idealTextColor(bg);
 
-        const scoreEl = document.createElement('div');
-        scoreEl.className = 'score';
-        scoreEl.innerHTML = `Score: <span>0</span>`;
-
         playerEl.appendChild(buttonEl);
-        playerEl.appendChild(scoreEl);
         playersContainer.appendChild(playerEl);
 
-        player.elements = { root: playerEl, button: buttonEl, scoreValue: scoreEl.querySelector('span') };
+        player.elements = { root: playerEl, button: buttonEl };
         gameState.players.push(player);
     }
 
-    updateScores();
     layoutPlayers();
     showQuestion();
 }
 
-// Show a question for the current round
+// Show a question (endless mode)
 function showQuestion() {
-    if (gameState.currentRound > gameState.totalRounds) {
-        endGame();
-        return;
-    }
-
     if (gameState.questionIndex >= gameState.questions.length) {
         // Reshuffle or reset questions if we run out
         gameState.questions = shuffleArray([...gameState.questions]);
@@ -188,7 +171,7 @@ function showQuestion() {
     }
 
     gameState.currentQuestion = gameState.questions[gameState.questionIndex];
-    questionElement.textContent = `Round ${gameState.currentRound} of ${gameState.totalRounds}: ${gameState.currentQuestion.question}`;
+    questionElement.textContent = gameState.currentQuestion.question;
 
     // Reset player states and UI
     resultElement.classList.add('hidden');
@@ -395,7 +378,7 @@ function evaluateRound() {
         secondGroup = groups[1] || [];
     }
 
-    // Scoring: descending points to all who answered.
+    // Scoring: descending points to all who answered (per-round only, no cumulative)
     // Top group gets N points (N = number of answered), next gets N - groupSize(previous), etc.
     const N = answered.length;
     // Track per-player round points
@@ -405,8 +388,7 @@ function evaluateRound() {
     groups.forEach(group => {
         const points = Math.max(0, N - rankIndex);
         group.forEach(r => {
-            r.player.score += points;
-            roundPoints.set(r.player, (roundPoints.get(r.player) || 0) + points);
+            roundPoints.set(r.player, points);
         });
         rankIndex += group.length;
     });
@@ -420,7 +402,7 @@ function evaluateRound() {
         }
     });
 
-    // Results message: show all players' round points and cumulative totals
+    // Results message: show round winner and points earned
     const firstNames = firstGroup.map(r => r.player.name);
     const secondNames = secondGroup.map(r => r.player.name);
     let header;
@@ -434,37 +416,32 @@ function evaluateRound() {
         const secondPts = Math.max(0, N - firstGroup.length);
         header = `Correct answer: ${correct}\n${firstNames.join(', ')} win${firstNames.length > 1 ? '' : 's'} this round! (${firstPts} pts)\nSecond: ${secondNames.join(', ')} (${secondPts} pts)`;
     }
-
-    // Order: answering players by rank, then non-answers (0 pts)
-    /*
-    const answeredPlayersInOrder = answered.map(r => r.player);
-    const nonAnsweredPlayers = gameState.players.filter(p => !answeredPlayersInOrder.includes(p));
-    const displayOrder = [...answeredPlayersInOrder, ...nonAnsweredPlayers];
-    const lines = displayOrder.map(p => `${p.name}: +${roundPoints.get(p)} (Total ${p.score % 1 === 0 ? p.score : p.score.toFixed(1)})`);
-    const msg = `${header}\n\nRound points and totals:\n` + lines.join('\n');
-    resultText.textContent = msg;
-    */
     resultText.textContent = header;
-    // Update scoreboard
-    updateScores();
 
-    // Populate compact results table (overall standings) with per-round details
+    // Populate compact results table with per-round details only (no cumulative totals)
     if (resultTable) {
         // Build a player -> diff map for this round (seconds off)
         const diffMap = new Map();
         answered.forEach(r => diffMap.set(r.player, r.diff));
 
-        const header = `<tr><th>Rank</th><th>Player</th><th>Round</th><th>Time</th><th>Total</th></tr>`;
-        const standings = [...gameState.players].sort((a, b) => b.score - a.score);
+        const tableHeader = `<tr><th>Rank</th><th>Player</th><th>Points</th><th>Off By</th></tr>`;
+        // Sort by round points descending, then by diff ascending for ties
+        const standings = [...gameState.players].sort((a, b) => {
+            const ptsA = roundPoints.get(a) || 0;
+            const ptsB = roundPoints.get(b) || 0;
+            if (ptsB !== ptsA) return ptsB - ptsA;
+            const diffA = diffMap.has(a) ? diffMap.get(a) : Infinity;
+            const diffB = diffMap.has(b) ? diffMap.get(b) : Infinity;
+            return diffA - diffB;
+        });
         const rows = standings
             .map((p, idx) => {
-                const round = (roundPoints.get(p) || 0);
-                const timeOff = diffMap.has(p) ? diffMap.get(p).toFixed(1) : '-';
-                const total = p.score % 1 === 0 ? p.score : p.score.toFixed(1);
-                return `<tr><td>${idx + 1}</td><td>${p.name}</td><td>${round}</td><td>${timeOff}</td><td>${total}</td></tr>`;
+                const pts = roundPoints.get(p) || 0;
+                const timeOff = diffMap.has(p) ? diffMap.get(p).toFixed(1) + 's' : '-';
+                return `<tr><td>${idx + 1}</td><td>${p.name}</td><td>${pts}</td><td>${timeOff}</td></tr>`;
             })
             .join('');
-        resultTable.innerHTML = header + rows;
+        resultTable.innerHTML = tableHeader + rows;
     }
 
     // Disable buttons till next
@@ -473,46 +450,15 @@ function evaluateRound() {
     // Show results and next button
     resultElement.classList.remove('hidden');
 
-    // Prepare for next round
-    nextBtn.textContent = (gameState.currentRound >= gameState.totalRounds) ? 'See Results' : 'Next Question';
+    nextBtn.textContent = 'Next Question';
 }
 
-function updateScores() {
-    gameState.players.forEach(p => {
-        p.elements.scoreValue.textContent = `${p.score % 1 === 0 ? p.score : p.score.toFixed(1)}`;
-    });
-}
 
 function nextQuestion() {
-    // Advance round and question index
-    gameState.currentRound++;
     gameState.questionIndex++;
     showQuestion();
 }
 
-function endGame() {
-    // Determine winners by score
-    const topScore = Math.max(...gameState.players.map(p => p.score));
-    const champs = gameState.players.filter(p => Math.abs(p.score - topScore) < 1e-6);
-    let summary = 'Game Over!\n\n';
-    if (champs.length === 1) {
-        summary += `${champs[0].name} wins with ${champs[0].score % 1 === 0 ? champs[0].score : champs[0].score.toFixed(1)} points!`;
-    } else {
-        summary += `Tie between ${champs.map(c => c.name).join(', ')} with ${topScore % 1 === 0 ? topScore : topScore.toFixed(1)} points!`;
-    }
-    summary += '\n\nFinal Scores:\n' + gameState.players.map(p => `${p.name}: ${p.score % 1 === 0 ? p.score : p.score.toFixed(1)}`).join('\n');
-
-    questionElement.textContent = summary;
-    resultElement.classList.add('hidden');
-
-    nextBtn.textContent = 'Play Again';
-    nextBtn.onclick = () => {
-        // Return to config screen
-        gameScreen.classList.add('hidden');
-        configScreen.classList.remove('hidden');
-    };
-    resultElement.classList.remove('hidden');
-}
 
 // Event Listeners
 startBtn.addEventListener('click', async () => {
@@ -522,11 +468,7 @@ startBtn.addEventListener('click', async () => {
 });
 
 nextBtn.addEventListener('click', () => {
-    if (gameState.currentRound >= gameState.totalRounds) {
-        endGame();
-    } else {
-        nextQuestion();
-    }
+    nextQuestion();
 });
 
 // Prevent context menu on long press

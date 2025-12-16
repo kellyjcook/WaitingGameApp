@@ -452,22 +452,34 @@ function evaluateRound() {
         }))
         .sort((a, b) => a.diff - b.diff);
 
-    // Determine first and second place groups (handle ties)
+    // Group by equal diff (ties) in sorted order
     let firstGroup = [];
     let secondGroup = [];
+    const groups = [];
     if (answered.length > 0) {
-        const best = answered[0].diff;
-        firstGroup = answered.filter(r => Math.abs(r.diff - best) < EPS);
-        const remaining = answered.filter(r => Math.abs(r.diff - best) >= EPS);
-        if (remaining.length > 0) {
-            const secondBest = remaining[0].diff;
-            secondGroup = remaining.filter(r => Math.abs(r.diff - secondBest) < EPS);
+        let currentGroup = [answered[0]];
+        for (let i = 1; i < answered.length; i++) {
+            if (Math.abs(answered[i].diff - answered[i - 1].diff) < EPS) {
+                currentGroup.push(answered[i]);
+            } else {
+                groups.push(currentGroup);
+                currentGroup = [answered[i]];
+            }
         }
+        groups.push(currentGroup);
+        firstGroup = groups[0] || [];
+        secondGroup = groups[1] || [];
     }
 
-    // Scoring: first place +5, second place +3
-    firstGroup.forEach(r => { r.player.score += 5; });
-    secondGroup.forEach(r => { r.player.score += 3; });
+    // Scoring: descending points to all who answered.
+    // Top group gets N points (N = number of answered), next gets N - groupSize(previous), etc.
+    const N = answered.length;
+    let rankIndex = 0; // counts how many players are ahead (used to compute points)
+    groups.forEach(group => {
+        const points = Math.max(0, N - rankIndex);
+        group.forEach(r => { r.player.score += points; });
+        rankIndex += group.length;
+    });
 
     // Button highlighting: mark first place as correct; others as incorrect
     gameState.players.forEach(p => p.elements.button.classList.remove('correct', 'incorrect'));
@@ -478,16 +490,19 @@ function evaluateRound() {
         }
     });
 
-    // Results message (only first and second place shown)
+    // Results message (show first and second groups with dynamic points)
     const firstNames = firstGroup.map(r => r.player.name);
     const secondNames = secondGroup.map(r => r.player.name);
     let msg;
     if (firstGroup.length === 0) {
         msg = `Correct answer: ${correct}\nNo valid answers.`;
     } else if (secondGroup.length === 0) {
-        msg = `Correct answer: ${correct}\n${firstNames.join(', ')} win${firstNames.length > 1 ? '' : 's'} this round! (5 pts)`;
+        const firstPts = N; // top group points
+        msg = `Correct answer: ${correct}\n${firstNames.join(', ')} win${firstNames.length > 1 ? '' : 's'} this round! (${firstPts} pts)`;
     } else {
-        msg = `Correct answer: ${correct}\n${firstNames.join(', ')} win${firstNames.length > 1 ? '' : 's'} this round! (5 pts)\nSecond: ${secondNames.join(', ')} (3 pts)`;
+        const firstPts = N;
+        const secondPts = Math.max(0, N - firstGroup.length);
+        msg = `Correct answer: ${correct}\n${firstNames.join(', ')} win${firstNames.length > 1 ? '' : 's'} this round! (${firstPts} pts)\nSecond: ${secondNames.join(', ')} (${secondPts} pts)`;
     }
     resultText.textContent = msg;
 

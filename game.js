@@ -184,7 +184,10 @@ async function initGameFromConfig() {
         playerEl.appendChild(scoreEl);
         playersContainer.appendChild(playerEl);
 
-        player.elements = { root: playerEl, button: buttonEl, scoreValue: scoreEl.querySelector('span') };
+        //Removed score from player button
+        //player.elements = { root: playerEl, button: buttonEl, scoreValue: scoreEl.querySelector('span') };
+        player.elements = { root: playerEl, button: buttonEl };
+
         gameState.players.push(player);
     }
 

@@ -191,8 +191,6 @@ function startCountdown() {
     timerElement.style.display = 'block';
 
     // Keep buttons interactive so we can detect releases during countdown
-    // Ensure player buttons are visible in case previous round hid them
-    playersContainer.classList.remove('hidden');
 
     if (gameState.countdownInterval) clearInterval(gameState.countdownInterval);
     gameState.countdownInterval = setInterval(() => {
@@ -295,8 +293,6 @@ function startRound() {
     // Show waiting overlay and invert colors during the round timing phase
     gameScreen.classList.add('invert-colors');
     waitingOverlay.classList.remove('hidden');
-    // Ensure player buttons are visible during round timing phase
-    playersContainer.classList.remove('hidden');
     // Enable buttons and attach handlers
     gameState.players.forEach(p => {
         const btn = p.elements.button;
@@ -497,7 +493,7 @@ function layoutPlayers() {
     // Base radius on the longest dimension so spacing uses as much perimeter as possible
     // Keep buttons within ~0.5 inches of the edge using CSS 96px/inch
     const INCH_PX = 96;
-    const edgeInsetPx = Math.round(0.15 * INCH_PX);
+    const edgeInsetPx = Math.round(0.5 * INCH_PX);
     const buttonRadius = buttonSize / 2;
     const radius = Math.max(0, Math.max(cx, cy) - buttonRadius - edgeInsetPx);
     const n = gameState.players.length;

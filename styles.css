@@ -185,6 +185,8 @@ button:active {
 .player-button.active {
     transform: scale(0.95);
     filter: brightness(0.9);
+    outline: 6px solid #ff9800;
+    outline-offset: 4px;
 }
 
 .hold-feedback {

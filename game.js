@@ -33,6 +33,7 @@ const nextBtn = document.getElementById('next-btn');
 const waitingOverlay = document.getElementById('waiting-overlay');
 const versionBadge = document.getElementById('version-badge');
 const playerNamesContainer = document.getElementById('player-names');
+const hardModeCheckbox = document.getElementById('hard-mode');
 
 // Render \n as line breaks in result text
 resultText.classList.add('nl-preline');
@@ -130,15 +131,14 @@ async function initGameFromConfig() {
     gameState.questionIndex = 0;
     gameState.players = [];
 
-    // Prepare questions
-    if (!gameState.questions || gameState.questions.length === 0) {
-        try {
-            const res = await fetch('questions.json', { cache: 'no-store' });
-            const data = await res.json();
-            gameState.questions = Array.isArray(data) ? data : [];
-        } catch (e) {
-            gameState.questions = [];
-        }
+    // Prepare questions (use hard+questions.json if Hard Mode is enabled)
+    const questionsFile = (hardModeCheckbox && hardModeCheckbox.checked) ? 'hard+questions.json' : 'questions.json';
+    try {
+        const res = await fetch(questionsFile, { cache: 'no-store' });
+        const data = await res.json();
+        gameState.questions = Array.isArray(data) ? data : [];
+    } catch (e) {
+        gameState.questions = [];
     }
     gameState.questions = shuffleArray([...gameState.questions]);
 

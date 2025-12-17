@@ -249,8 +249,22 @@ function startCountdown() {
     }, 1000);
 }
 
+// Block multi-touch gestures during hold phase
+function onGestureStart(e) {
+    if (e.cancelable) e.preventDefault();
+}
+function onMultiTouchMove(e) {
+    if (e.touches && e.touches.length > 1 && e.cancelable) {
+        e.preventDefault();
+    }
+}
+
 // Pre-round: wait until all players are actively holding their buttons
 function beginHoldToStart() {
+    // Block multi-touch gestures while holding/moving buttons
+    document.addEventListener('gesturestart', onGestureStart, { passive: false });
+    document.addEventListener('touchmove', onMultiTouchMove, { passive: false });
+
     // Initialize per-player ready state and attach listeners
     gameState.players.forEach(p => {
         p.isHolding = false;
@@ -306,6 +320,10 @@ function beginHoldToStart() {
 }
 
 function cleanupReadyListeners() {
+    // Remove multi-touch gesture blockers
+    document.removeEventListener('gesturestart', onGestureStart);
+    document.removeEventListener('touchmove', onMultiTouchMove);
+
     gameState.players.forEach(p => {
         const btn = p.elements.button;
         if (p._readyListeners) {

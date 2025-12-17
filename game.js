@@ -517,7 +517,7 @@ function evaluateRound() {
         answered.forEach(r => diffMap.set(r.player, r.diff));
 
         const header = `<tr><th align=center>Rank</th><th>Player</th><th align=center>Points</th><th>Time</th></tr>`;
-        const standings = [...gameState.players].sort((a, b) => b.score - a.score);
+        const standings = [...gameState.players].sort((a, b) => (roundPoints.get(b) || 0) - (roundPoints.get(a) || 0));
         const rows = standings
             .map((p, idx) => {
                 const round = (roundPoints.get(p) || 0);

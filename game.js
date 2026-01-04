@@ -38,6 +38,51 @@ const hardModeCheckbox = document.getElementById('hard-mode');
 // Render \n as line breaks in result text
 resultText.classList.add('nl-preline');
 
+// Cookie utilities
+function setCookie(name, value, days = 365) {
+    const expires = new Date(Date.now() + days * 864e5).toUTCString();
+    document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+}
+
+function getCookie(name) {
+    const cookies = document.cookie.split('; ');
+    for (const cookie of cookies) {
+        const [key, val] = cookie.split('=');
+        if (decodeURIComponent(key) === name) {
+            return decodeURIComponent(val);
+        }
+    }
+    return null;
+}
+
+function savePlayerConfigToCookies() {
+    const count = playerCountSelect ? playerCountSelect.value : '1';
+    setCookie('playerCount', count);
+    const names = [];
+    for (let i = 1; i <= 8; i++) {
+        const inp = document.getElementById(`player-name-${i}`);
+        names.push(inp ? inp.value : '');
+    }
+    setCookie('playerNames', JSON.stringify(names));
+}
+
+function loadPlayerConfigFromCookies() {
+    const count = getCookie('playerCount');
+    if (count && playerCountSelect) {
+        playerCountSelect.value = count;
+    }
+    const namesJson = getCookie('playerNames');
+    if (namesJson) {
+        try {
+            const names = JSON.parse(namesJson);
+            if (Array.isArray(names)) {
+                // Store for use after inputs are rendered
+                window._savedPlayerNames = names;
+            }
+        } catch (_) {}
+    }
+}
+
 // Utilities
 function shuffleArray(array) {
     for (let i = array.length - 1; i > 0; i--) {
@@ -78,14 +123,14 @@ async function loadVersionBadge() {
 
 // Bright distinct colors for up to 8 players
 const PLAYER_COLORS = [
-    '#e53935', // red
-    '#1e88e5', // blue
-    '#43a047', // green
-    '#fdd835', // yellow
-    '#8e24aa', // purple
-    '#fb8c00', // orange
-    '#00acc1', // cyan
-    '#7cb342'  // lime
+'#e90600',  // red
+'#F27622',  // orange
+'#131541',  // dark blue
+'#46A1D9',  //light blue
+'#FBE348',  //yellow
+'#1A626A',  //green
+'#8e24aa',  // purple
+'#7cb342'   // lime
 ];
 
 function idealTextColor(bgHex) {
@@ -141,6 +186,13 @@ async function initGameFromConfig() {
         gameState.questions = [];
     }
     gameState.questions = shuffleArray([...gameState.questions]);
+
+    // Insert mandatory tutorial question at the start
+    const tutorialQuestion = {
+        question: "Put your finger on your button and let go 3 seconds after WAITING appears. Closest to 3 seconds wins the round!",
+        answer: 3
+    };
+    gameState.questions.unshift(tutorialQuestion);
 
     // Render players dynamically
     playersContainer.innerHTML = '';
@@ -384,8 +436,8 @@ function startRound() {
             if (p.startTime) {
                 const endTime = Date.now();
                 const duration = (endTime - p.startTime) / 1000;
-                // record to 0.1s precision but we will compare against integer answers
-                p.answerSeconds = Math.round(duration * 10) / 10;
+                // record to 0.01s precision but we will compare against integer answers
+                p.answerSeconds = Math.round(duration * 100) / 100;
                 maybeFinishRound();
             }
             btn.classList.remove('active');
@@ -516,14 +568,15 @@ function evaluateRound() {
         const diffMap = new Map();
         answered.forEach(r => diffMap.set(r.player, r.diff));
 
-        const header = `<tr><th align=center>Rank</th><th>Player</th><th align=center>Points</th><th>Time</th></tr>`;
+        const header = `<tr><th></th><th>Player</th><th style="text-align:center">Points</th><th style="text-align:right">Time</th></tr>`;
         const standings = [...gameState.players].sort((a, b) => (roundPoints.get(b) || 0) - (roundPoints.get(a) || 0));
         const rows = standings
             .map((p, idx) => {
                 const round = (roundPoints.get(p) || 0);
-                const timeOff = diffMap.has(p) ? diffMap.get(p).toFixed(1) : '-';
+                const heldTime = p.answerSeconds !== null ? p.answerSeconds.toFixed(2) : '-';
+                const playerColor = PLAYER_COLORS[(p.id - 1) % PLAYER_COLORS.length];
                 //const total = p.score % 1 === 0 ? p.score : p.score.toFixed(1);
-                return `<tr><td>${idx + 1}</td><td>${p.name}</td><td align=center>${round}</td><td>${timeOff}</td></tr>`;
+                return `<tr><td><div style="width:16px;height:16px;border-radius:3px;background:${playerColor}"></div></td><td>${p.name}</td><td style="text-align:center">${round}</td><td style="text-align:right">${heldTime}</td></tr>`;
             })
             .join('');
         resultTable.innerHTML = header + rows;
@@ -669,19 +722,55 @@ function renderPlayerNameInputs() {
     });
     playerNamesContainer.innerHTML = '';
     for (let i = 1; i <= count; i++) {
+        // Create wrapper for color box + input
+        const wrapper = document.createElement('div');
+        wrapper.className = 'player-name-wrapper';
+
+        // Create color indicator box
+        const colorBox = document.createElement('div');
+        colorBox.className = 'player-color-box';
+        const bg = PLAYER_COLORS[(i - 1) % PLAYER_COLORS.length];
+        colorBox.style.backgroundColor = bg;
+        colorBox.style.outlineColor = bg;
+
         const inp = document.createElement('input');
         inp.type = 'text';
         inp.id = `player-name-${i}`;
         inp.maxLength = 25;
         inp.placeholder = `Player ${i}`;
+        inp.style.borderColor = bg;
         if (existing.has(inp.id)) inp.value = existing.get(inp.id);
-        playerNamesContainer.appendChild(inp);
+
+        wrapper.appendChild(colorBox);
+        wrapper.appendChild(inp);
+        playerNamesContainer.appendChild(wrapper);
     }
 }
 
 // Update inputs when player count changes
 if (playerCountSelect) {
-    playerCountSelect.addEventListener('change', renderPlayerNameInputs);
+    playerCountSelect.addEventListener('change', () => {
+        renderPlayerNameInputs();
+        savePlayerConfigToCookies();
+    });
 }
+
+// Load saved config from cookies on startup
+loadPlayerConfigFromCookies();
+
 // Initial render on load
 renderPlayerNameInputs();
+
+// Apply saved names after inputs are rendered
+if (window._savedPlayerNames) {
+    window._savedPlayerNames.forEach((name, idx) => {
+        const inp = document.getElementById(`player-name-${idx + 1}`);
+        if (inp && name) inp.value = name;
+    });
+    delete window._savedPlayerNames;
+}
+
+// Save names on input change
+if (playerNamesContainer) {
+    playerNamesContainer.addEventListener('input', savePlayerConfigToCookies);
+}

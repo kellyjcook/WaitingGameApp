@@ -34,6 +34,10 @@ jobs:
           sshpass -e rsync -avz --delete \
             --exclude ".git" \
             --exclude ".github" \
+            --exclude ".claude" \
+            --exclude "supabase-migration.sql" \
+            --exclude "SUPABASE_SETUP.md" \
+            --exclude "*.md" \
             -e "ssh -o StrictHostKeyChecking=no" \
             ./ \
             kellyjcook@iad1-shared-b8-15.dreamhost.com:$DEPLOY_PATH

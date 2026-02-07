@@ -176,8 +176,9 @@ async function initGameFromConfig() {
     gameState.questionIndex = 0;
     gameState.players = [];
 
-    // Prepare questions (use hard+questions.json if Hard Mode is enabled)
-    const questionsFile = (hardModeCheckbox && hardModeCheckbox.checked) ? 'hard+questions.json' : 'questions.json';
+    // Prepare questions — respects unlock status and hard mode
+    const questionsFile = (typeof getQuestionFile === 'function') ? getQuestionFile() :
+        ((hardModeCheckbox && hardModeCheckbox.checked) ? 'hard+questions.json' : 'questions.json');
     try {
         const res = await fetch(questionsFile, { cache: 'no-store' });
         const data = await res.json();
@@ -253,6 +254,13 @@ async function initGameFromConfig() {
 function showQuestion() {
     if (gameState.currentRound > gameState.totalRounds) {
         endGame();
+        return;
+    }
+
+    // Guest users: after exhausting all guest questions, prompt for unlock
+    if (typeof isGuestUser === 'function' && isGuestUser() &&
+        gameState.questionIndex >= gameState.questions.length) {
+        promptUnlock();
         return;
     }
 
@@ -622,9 +630,13 @@ function endGame() {
 
     nextBtn.textContent = 'Play Again';
     nextBtn.onclick = () => {
-        // Return to config screen
-        gameScreen.classList.add('hidden');
-        configScreen.classList.remove('hidden');
+        // Return to config screen (use showScreen if available from auth.js)
+        if (typeof showScreen === 'function') {
+            showScreen('config-screen');
+        } else {
+            gameScreen.classList.add('hidden');
+            configScreen.classList.remove('hidden');
+        }
     };
     resultElement.classList.remove('hidden');
 }
@@ -710,6 +722,16 @@ window.addEventListener('resize', () => {
 
 // Kick off version badge load on startup
 loadVersionBadge();
+
+// Boot auth flow (shows auth screen first, then config on success)
+if (typeof bootAuth === 'function') {
+    bootAuth();
+}
+
+// Hook profile auto-save into config inputs
+if (typeof initProfileHooks === 'function') {
+    initProfileHooks();
+}
 
 // Render player name inputs according to selected player count
 function renderPlayerNameInputs() {

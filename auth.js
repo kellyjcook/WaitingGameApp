@@ -3,7 +3,7 @@
 const SUPABASE_URL = 'https://cwhiaiiqdkjfchgxxyoj.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_hkqrBrAlrzEYxawusQE_cw_bB-RipO_';
 
-let supabase = null;
+let supabaseClient = null;
 let currentUser = null; // { id, email, display_name, location, is_unlocked }
 
 function initSupabase() {
@@ -11,15 +11,15 @@ function initSupabase() {
         console.error('Supabase SDK not loaded');
         return false;
     }
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     return true;
 }
 
 // ── Auth State ─────────────────────────────────────────────────────
 
 async function checkSession() {
-    if (!supabase) return null;
-    const { data: { session } } = await supabase.auth.getSession();
+    if (!supabaseClient) return null;
+    const { data: { session } } = await supabaseClient.auth.getSession();
     if (session) {
         await loadProfile(session.user.id);
         return currentUser;
@@ -28,7 +28,7 @@ async function checkSession() {
 }
 
 async function loadProfile(userId) {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
         .from('profiles')
         .select('id, display_name, email, location, is_unlocked')
         .eq('id', userId)
@@ -42,7 +42,7 @@ async function loadProfile(userId) {
 // ── Registration ───────────────────────────────────────────────────
 
 async function registerUser(email, password, displayName, location) {
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await supabaseClient.auth.signUp({
         email,
         password,
         options: {
@@ -55,7 +55,7 @@ async function registerUser(email, password, displayName, location) {
     if (data.user) {
         // Small delay to let the trigger fire
         await new Promise(r => setTimeout(r, 500));
-        await supabase
+        await supabaseClient
             .from('profiles')
             .update({ location, display_name: displayName })
             .eq('id', data.user.id);
@@ -67,7 +67,7 @@ async function registerUser(email, password, displayName, location) {
 // ── Login ──────────────────────────────────────────────────────────
 
 async function loginUser(email, password) {
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabaseClient.auth.signInWithPassword({
         email,
         password
     });
@@ -81,7 +81,7 @@ async function loginUser(email, password) {
 // ── Logout ─────────────────────────────────────────────────────────
 
 async function logoutUser() {
-    await supabase.auth.signOut();
+    await supabaseClient.auth.signOut();
     currentUser = null;
 }
 
@@ -91,7 +91,7 @@ async function redeemUnlockKey(code) {
     if (!currentUser) return { error: 'Not logged in' };
 
     // Check if key exists and is unredeemed
-    const { data: key, error: findErr } = await supabase
+    const { data: key, error: findErr } = await supabaseClient
         .from('unlock_keys')
         .select('id, redeemed_by')
         .eq('code', code.trim())
@@ -101,7 +101,7 @@ async function redeemUnlockKey(code) {
     if (key.redeemed_by) return { error: 'This code has already been used' };
 
     // Redeem the key
-    const { error: redeemErr } = await supabase
+    const { error: redeemErr } = await supabaseClient
         .from('unlock_keys')
         .update({ redeemed_by: currentUser.id, redeemed_at: new Date().toISOString() })
         .eq('id', key.id);
@@ -109,7 +109,7 @@ async function redeemUnlockKey(code) {
     if (redeemErr) return { error: 'Failed to redeem code. Please try again.' };
 
     // Mark user as unlocked
-    const { error: unlockErr } = await supabase
+    const { error: unlockErr } = await supabaseClient
         .from('profiles')
         .update({ is_unlocked: true })
         .eq('id', currentUser.id);
@@ -124,7 +124,7 @@ async function redeemUnlockKey(code) {
 
 async function loadPreferences() {
     if (!currentUser) return null;
-    const { data } = await supabase
+    const { data } = await supabaseClient
         .from('user_preferences')
         .select('default_player_count, player_names, hard_mode')
         .eq('user_id', currentUser.id)
@@ -134,7 +134,7 @@ async function loadPreferences() {
 
 async function savePreferences(prefs) {
     if (!currentUser) return;
-    await supabase
+    await supabaseClient
         .from('user_preferences')
         .update({ ...prefs, updated_at: new Date().toISOString() })
         .eq('user_id', currentUser.id);
@@ -360,7 +360,7 @@ function renderUserBadge() {
 // ── Boot ────────────────────────────────────────────────────────────
 
 async function bootAuth() {
-    if (!initSupabase()) {
+    if (!initSupabase() || !supabaseClient) {
         // SDK failed to load — let the game run without auth
         showScreen('config-screen');
         return;

@@ -33,6 +33,12 @@ body {
     touch-action: manipulation;
 }
 
+/* Allow scrolling on landing, auth, confirm, and unlock screens */
+body.allow-scroll {
+    overflow: auto;
+    height: auto;
+}
+
 /* Invert filter applied to the whole game screen during waiting state */
 .invert-colors {
     filter: invert(1) hue-rotate(180deg);
@@ -40,9 +46,9 @@ body {
 
 .container {
     max-width: 100%;
-    height: 100vh;
+    min-height: 100vh;
     margin: 0 auto;
-    padding: 20px;
+    padding: 0;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -53,13 +59,14 @@ body {
     position: relative;
     width: 100%;
     max-width: 100%;
-    height: 100vh;
+    min-height: 100vh;
     text-align: center;
 }
 
 /* Decorative collage background for the configuration screen */
 #config-screen {
     overflow: hidden;
+    padding: 20px;
 }
 
 #config-screen::before {
@@ -352,15 +359,253 @@ button:active {
     min-width: 0;
 }
 
+/* ── Landing Page ───────────────────────────────────── */
+
+#landing-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    height: auto;
+    padding: 0;
+}
+
+.landing-hero {
+    width: 100%;
+    background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 50%, #1565c0 100%);
+    color: #fff;
+    padding: 60px 20px 50px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.landing-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.1) 0%, transparent 50%),
+                radial-gradient(circle at 70% 80%, rgba(255,255,255,0.08) 0%, transparent 40%);
+    pointer-events: none;
+}
+
+.landing-hero h1 {
+    color: #fff;
+    font-size: 3rem;
+    margin-bottom: 12px;
+    position: relative;
+}
+
+.landing-icon {
+    font-size: 4rem;
+    margin-bottom: 16px;
+    position: relative;
+    animation: pulse-icon 2s ease-in-out infinite;
+}
+
+@keyframes pulse-icon {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+.landing-tagline {
+    font-size: 1.3rem;
+    opacity: 0.9;
+    margin-bottom: 28px;
+    position: relative;
+}
+
+.landing-cta {
+    background: #fff;
+    color: #1a73e8;
+    font-size: 1.3rem;
+    font-weight: 700;
+    padding: 16px 48px;
+    border-radius: 50px;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    position: relative;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+.landing-cta:active {
+    transform: scale(0.97);
+    background: #e8f0fe;
+}
+
+.landing-content {
+    max-width: 720px;
+    width: 100%;
+    padding: 0 20px 40px;
+}
+
+.landing-section {
+    margin-top: 40px;
+}
+
+.landing-section-icon {
+    font-size: 2.5rem;
+    margin-bottom: 8px;
+}
+
+.landing-section h2 {
+    color: #1a73e8;
+    font-size: 1.6rem;
+    margin-bottom: 20px;
+}
+
+/* How it works steps */
+.landing-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    text-align: left;
+}
+
+.landing-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    background: #fff;
+    padding: 16px 20px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.step-number {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    background: #1a73e8;
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1.1rem;
+}
+
+.step-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.step-text strong {
+    color: #202124;
+    font-size: 1.05rem;
+}
+
+.step-text span {
+    color: #5f6368;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+/* Getting started info cards */
+.landing-info-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.info-card {
+    background: #fff;
+    padding: 20px 24px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    text-align: left;
+    border-left: 4px solid #1a73e8;
+}
+
+.info-card h3 {
+    color: #202124;
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+}
+
+.info-card p {
+    color: #5f6368;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+/* Features grid */
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.feature-item {
+    background: #fff;
+    padding: 14px 16px;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #202124;
+    text-align: center;
+}
+
+.landing-bottom-cta {
+    margin-top: 40px;
+    padding-bottom: 20px;
+    text-align: center;
+}
+
 /* ── Auth Screen ─────────────────────────────────────── */
 
 #auth-screen,
-#unlock-screen {
+#unlock-screen,
+#confirm-screen {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     padding: 20px;
+    min-height: 100vh;
+}
+
+.auth-header {
+    position: relative;
+    text-align: center;
+    width: 100%;
+    max-width: 400px;
+}
+
+.back-btn {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #1a73e8;
+    font-size: 1.8rem;
+    cursor: pointer;
+    padding: 4px 12px;
+    margin: 0;
+    line-height: 1;
+    border-radius: 8px;
+    transition: background 0.2s;
+}
+
+.back-btn:active {
+    background: rgba(26,115,232,0.1);
+}
+
+.auth-header h1 {
+    font-size: 2rem;
+    margin-bottom: 8px;
+}
+
+.auth-header p {
+    color: #5f6368;
+    font-size: 1rem;
+    margin-bottom: 0;
 }
 
 .auth-card {
@@ -434,6 +679,122 @@ button:active {
     margin-bottom: 12px;
 }
 
+/* ── Email Confirmation Screen ───────────────────────── */
+
+.confirm-container {
+    max-width: 480px;
+    width: 100%;
+    text-align: center;
+}
+
+.confirm-icon {
+    font-size: 4rem;
+    margin-bottom: 12px;
+}
+
+.confirm-card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    padding: 28px 24px;
+    margin-top: 20px;
+    text-align: center;
+}
+
+.confirm-lead {
+    font-size: 1.1rem;
+    color: #202124;
+    line-height: 1.6;
+    margin-bottom: 24px;
+}
+
+.confirm-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    text-align: left;
+    margin-bottom: 24px;
+}
+
+.confirm-step {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 14px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.confirm-step-num {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    background: #1a73e8;
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+}
+
+.confirm-step span {
+    color: #202124;
+    font-size: 0.95rem;
+    line-height: 1.4;
+}
+
+.confirm-note {
+    background: #fff8e1;
+    border: 1px solid #ffecb3;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 0.85rem;
+    color: #5f6368;
+    line-height: 1.5;
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.confirm-note strong {
+    color: #202124;
+}
+
+.confirm-note em {
+    color: #1a73e8;
+    font-style: normal;
+    font-weight: 500;
+}
+
+/* ── Unlock Screen ────────────────────────────────────── */
+
+.unlock-container {
+    max-width: 480px;
+    width: 100%;
+    text-align: center;
+}
+
+.unlock-lead {
+    font-size: 1.1rem;
+    color: #202124;
+    margin-bottom: 8px;
+}
+
+.unlock-info {
+    font-size: 0.95rem;
+    color: #5f6368;
+    line-height: 1.5;
+    margin-bottom: 20px;
+}
+
+.unlock-help {
+    font-size: 0.85rem;
+    color: #5f6368;
+    margin-top: 16px;
+    line-height: 1.4;
+}
+
 /* ── User Badge (top-right) ──────────────────────────── */
 
 #user-badge {
@@ -476,23 +837,63 @@ button:active {
     background: rgba(255,255,255,0.15);
 }
 
-/* iPad specific optimizations */
+/* ── Responsive ──────────────────────────────────────── */
+
 @media (max-width: 1024px) {
     h1 {
         font-size: 2.2rem;
     }
-    
+
     h2 {
         font-size: 1.5rem;
     }
-    
+
     .player {
         padding: 8px;
     }
-    
+
     .player-button {
         width: 110px;
         height: 110px;
         font-size: 1rem;
+    }
+
+    .landing-hero h1 {
+        font-size: 2.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .landing-hero {
+        padding: 40px 16px 36px;
+    }
+
+    .landing-hero h1 {
+        font-size: 2rem;
+    }
+
+    .landing-icon {
+        font-size: 3rem;
+    }
+
+    .landing-tagline {
+        font-size: 1.1rem;
+    }
+
+    .landing-cta {
+        font-size: 1.1rem;
+        padding: 14px 36px;
+    }
+
+    .feature-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .auth-header h1 {
+        font-size: 1.6rem;
+    }
+
+    .back-btn {
+        font-size: 1.4rem;
     }
 }

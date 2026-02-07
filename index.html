@@ -3,15 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>WaitingGameAlpha</title>
+    <title>The Waiting Game</title>
     <link id="app-css" rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
 </head>
 <body>
     <div class="container">
-        <!-- Auth Screen (shown first, before config) -->
-        <div id="auth-screen" class="screen">
+        <!-- Landing Page (shown first to all visitors) -->
+        <div id="landing-screen" class="screen">
+            <!-- Populated by auth.js renderLandingScreen() -->
+        </div>
+
+        <!-- Auth Screen (login / register) -->
+        <div id="auth-screen" class="screen hidden">
             <!-- Populated by auth.js renderAuthScreen() -->
+        </div>
+
+        <!-- Email Confirmation Screen (shown after registration) -->
+        <div id="confirm-screen" class="screen hidden">
+            <!-- Populated by auth.js renderConfirmScreen() -->
         </div>
 
         <!-- Unlock Screen (shown when guest exhausts 25 questions) -->

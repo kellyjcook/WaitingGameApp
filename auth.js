@@ -51,9 +51,14 @@ async function registerUser(email, password, displayName, location) {
     });
     if (error) return { error: error.message };
 
+    // Check if email confirmation is required
+    // Supabase returns identities=[] when email confirmation is pending
+    const needsConfirmation = data.user && (!data.user.identities || data.user.identities.length === 0)
+        || (data.user && !data.session);
+
     // Update profile with location (trigger creates the row, we update it)
-    if (data.user) {
-        // Small delay to let the trigger fire
+    if (data.user && data.session) {
+        // Only update if we have a session (email confirmed or confirmation disabled)
         await new Promise(r => setTimeout(r, 500));
         await supabaseClient
             .from('profiles')
@@ -61,7 +66,8 @@ async function registerUser(email, password, displayName, location) {
             .eq('id', data.user.id);
         await loadProfile(data.user.id);
     }
-    return { user: data.user };
+
+    return { user: data.user, needsConfirmation };
 }
 
 // ── Login ──────────────────────────────────────────────────────────
@@ -140,14 +146,112 @@ async function savePreferences(prefs) {
         .eq('user_id', currentUser.id);
 }
 
+// ── Landing Page ──────────────────────────────────────────────────
+
+function renderLandingScreen() {
+    const landing = document.getElementById('landing-screen');
+    if (!landing) return;
+    landing.innerHTML = `
+        <div class="landing-hero">
+            <div class="landing-icon">&#x23F3;</div>
+            <h1>The Waiting Game</h1>
+            <p class="landing-tagline">A party game where timing is everything</p>
+            <button id="landing-play-btn" class="landing-cta">Play Now</button>
+        </div>
+
+        <div class="landing-content">
+            <div class="landing-section">
+                <div class="landing-section-icon">&#x1F3AF;</div>
+                <h2>How It Works</h2>
+                <div class="landing-steps">
+                    <div class="landing-step">
+                        <div class="step-number">1</div>
+                        <div class="step-text">
+                            <strong>Read the question</strong>
+                            <span>Each question has a numerical answer between 1 and 30</span>
+                        </div>
+                    </div>
+                    <div class="landing-step">
+                        <div class="step-number">2</div>
+                        <div class="step-text">
+                            <strong>Hold your button</strong>
+                            <span>All players press and hold their on-screen button at the same time</span>
+                        </div>
+                    </div>
+                    <div class="landing-step">
+                        <div class="step-number">3</div>
+                        <div class="step-text">
+                            <strong>Count in your head</strong>
+                            <span>Release after the number of seconds equal to the answer</span>
+                        </div>
+                    </div>
+                    <div class="landing-step">
+                        <div class="step-number">4</div>
+                        <div class="step-text">
+                            <strong>Closest wins!</strong>
+                            <span>The player who releases closest to the correct time scores the most points</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="landing-section">
+                <div class="landing-section-icon">&#x1F680;</div>
+                <h2>Getting Started</h2>
+                <div class="landing-info-cards">
+                    <div class="info-card">
+                        <h3>&#x1F4DD; Create an Account</h3>
+                        <p>Register with your name, email, and location. You'll receive a quick confirmation email from The Waiting Game to verify your address.</p>
+                    </div>
+                    <div class="info-card">
+                        <h3>&#x1F3AE; Try It Free</h3>
+                        <p>New players get 25 free trivia questions to try the game. Play with up to 8 players on the same device!</p>
+                    </div>
+                    <div class="info-card">
+                        <h3>&#x1F511; Unlock Full Access</h3>
+                        <p>Enter your 8-digit unlock code to get unlimited access to hundreds of questions, including Hard Mode.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="landing-section landing-features">
+                <div class="landing-section-icon">&#x2728;</div>
+                <h2>Features</h2>
+                <div class="feature-grid">
+                    <div class="feature-item">&#x1F465; 1-8 Players</div>
+                    <div class="feature-item">&#x1F4F1; Works on Any Device</div>
+                    <div class="feature-item">&#x1F9E0; Hundreds of Questions</div>
+                    <div class="feature-item">&#x1F525; Hard Mode</div>
+                    <div class="feature-item">&#x2601; Cloud-Saved Preferences</div>
+                    <div class="feature-item">&#x1F3C6; Points &amp; Standings</div>
+                </div>
+            </div>
+
+            <div class="landing-bottom-cta">
+                <button id="landing-play-btn-bottom" class="landing-cta">Get Started</button>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('landing-play-btn').addEventListener('click', () => {
+        showScreen('auth-screen');
+    });
+    document.getElementById('landing-play-btn-bottom').addEventListener('click', () => {
+        showScreen('auth-screen');
+    });
+}
+
 // ── Auth UI Rendering ──────────────────────────────────────────────
 
 function renderAuthScreen() {
     const authScreen = document.getElementById('auth-screen');
     if (!authScreen) return;
     authScreen.innerHTML = `
-        <h1>Welcome to The Waiting Game</h1>
-        <p>Sign in or create an account to play</p>
+        <div class="auth-header">
+            <button id="auth-back-btn" class="back-btn" title="Back to home">&#x2190;</button>
+            <h1>The Waiting Game</h1>
+            <p>Sign in or create an account to play</p>
+        </div>
         <div class="auth-card">
             <div class="auth-tabs">
                 <button class="auth-tab active" data-tab="login">Sign In</button>
@@ -170,6 +274,11 @@ function renderAuthScreen() {
             </form>
         </div>
     `;
+
+    // Back button
+    document.getElementById('auth-back-btn').addEventListener('click', () => {
+        showScreen('landing-screen');
+    });
 
     // Tab switching
     authScreen.querySelectorAll('.auth-tab').forEach(tab => {
@@ -196,7 +305,12 @@ function renderAuthScreen() {
         const result = await loginUser(email, password);
 
         if (result.error) {
-            showAuthError(result.error);
+            // Friendlier message for unconfirmed email
+            if (result.error.toLowerCase().includes('email not confirmed')) {
+                showAuthError('Please check your email and click the confirmation link from The Waiting Game before signing in.');
+            } else {
+                showAuthError(result.error);
+            }
             btn.disabled = false;
             btn.textContent = 'Sign In';
         } else {
@@ -230,6 +344,10 @@ function renderAuthScreen() {
             showAuthError(result.error);
             btn.disabled = false;
             btn.textContent = 'Create Account';
+        } else if (result.needsConfirmation) {
+            // Show friendly email confirmation screen
+            renderConfirmScreen(email);
+            showScreen('confirm-screen');
         } else {
             onAuthSuccess();
         }
@@ -249,24 +367,71 @@ function clearAuthError() {
     if (el) el.classList.add('hidden');
 }
 
+// ── Email Confirmation Screen ─────────────────────────────────────
+
+function renderConfirmScreen(email) {
+    const screen = document.getElementById('confirm-screen');
+    if (!screen) return;
+    const maskedEmail = email || 'your email';
+    screen.innerHTML = `
+        <div class="confirm-container">
+            <div class="confirm-icon">&#x2709;</div>
+            <h1>Check Your Email</h1>
+            <div class="confirm-card">
+                <p class="confirm-lead">
+                    We've sent a confirmation link to<br>
+                    <strong>${maskedEmail}</strong>
+                </p>
+                <div class="confirm-steps">
+                    <div class="confirm-step">
+                        <span class="confirm-step-num">1</span>
+                        <span>Open the email from <strong>The Waiting Game</strong></span>
+                    </div>
+                    <div class="confirm-step">
+                        <span class="confirm-step-num">2</span>
+                        <span>Click the <strong>Confirm your email</strong> link</span>
+                    </div>
+                    <div class="confirm-step">
+                        <span class="confirm-step-num">3</span>
+                        <span>Come back here and <strong>sign in</strong> to play!</span>
+                    </div>
+                </div>
+                <div class="confirm-note">
+                    <strong>Don't see it?</strong> Check your spam or junk folder.
+                    The email comes from <em>noreply@mail.app.supabase.io</em> on behalf of The Waiting Game.
+                </div>
+                <button id="confirm-signin-btn">Go to Sign In</button>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('confirm-signin-btn').addEventListener('click', () => {
+        showScreen('auth-screen');
+    });
+}
+
 // ── Unlock UI ──────────────────────────────────────────────────────
 
 function renderUnlockScreen() {
     const unlockScreen = document.getElementById('unlock-screen');
     if (!unlockScreen) return;
     unlockScreen.innerHTML = `
-        <h1>Trial Complete</h1>
-        <p>You've played all 25 guest questions.</p>
-        <p>Enter an unlock code to get unlimited access to all questions.</p>
-        <div class="auth-card">
-            <div id="unlock-error" class="auth-error hidden"></div>
-            <form id="unlock-form" class="auth-form">
-                <input type="text" id="unlock-code" placeholder="8-digit unlock code"
-                       maxlength="8" pattern="[0-9]{8}" required
-                       inputmode="numeric" autocomplete="off"
-                       style="text-align:center; font-size:1.5rem; letter-spacing:4px">
-                <button type="submit">Unlock</button>
-            </form>
+        <div class="unlock-container">
+            <div class="confirm-icon">&#x1F512;</div>
+            <h1>Trial Complete</h1>
+            <div class="auth-card">
+                <p class="unlock-lead">You've played all 25 guest questions. Nice work!</p>
+                <p class="unlock-info">Enter your 8-digit unlock code to get unlimited access to all questions, including Hard Mode.</p>
+                <div id="unlock-error" class="auth-error hidden"></div>
+                <form id="unlock-form" class="auth-form">
+                    <input type="text" id="unlock-code" placeholder="8-digit unlock code"
+                           maxlength="8" pattern="[0-9]{8}" required
+                           inputmode="numeric" autocomplete="off"
+                           style="text-align:center; font-size:1.5rem; letter-spacing:4px">
+                    <button type="submit">Unlock Full Game</button>
+                </form>
+                <p class="unlock-help">Don't have a code? Contact the person who shared The Waiting Game with you.</p>
+            </div>
         </div>
     `;
 
@@ -285,7 +450,7 @@ function renderUnlockScreen() {
             errEl.textContent = result.error;
             errEl.classList.remove('hidden');
             btn.disabled = false;
-            btn.textContent = 'Unlock';
+            btn.textContent = 'Unlock Full Game';
         } else {
             // Success — transition to config screen with full questions
             showScreen('config-screen');
@@ -299,6 +464,15 @@ function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
     const target = document.getElementById(id);
     if (target) target.classList.remove('hidden');
+
+    // Landing page needs scrolling; game screens need overflow:hidden
+    const scrollableScreens = ['landing-screen', 'auth-screen', 'confirm-screen', 'unlock-screen'];
+    if (scrollableScreens.includes(id)) {
+        document.body.classList.add('allow-scroll');
+        window.scrollTo(0, 0);
+    } else {
+        document.body.classList.remove('allow-scroll');
+    }
 }
 
 async function onAuthSuccess() {
@@ -348,7 +522,7 @@ function renderUserBadge() {
         if (logoutBtn) {
             logoutBtn.addEventListener('click', async () => {
                 await logoutUser();
-                showScreen('auth-screen');
+                showScreen('landing-screen');
                 badge.classList.add('hidden');
             });
         }
@@ -366,6 +540,7 @@ async function bootAuth() {
         return;
     }
 
+    renderLandingScreen();
     renderAuthScreen();
     renderUnlockScreen();
 
@@ -374,6 +549,6 @@ async function bootAuth() {
     if (user) {
         await onAuthSuccess();
     } else {
-        showScreen('auth-screen');
+        showScreen('landing-screen');
     }
 }

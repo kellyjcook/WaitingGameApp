@@ -26,11 +26,15 @@ jobs:
       - name: Sync files to server
         env:
           SSHPASS: ${{ secrets.DEPLOY_PASSWORD }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
           if [ -z "$DEPLOY_PATH" ]; then
             echo "DEPLOY_PATH secret is not set. Please set it in GitHub repo secrets." >&2
             exit 1
           fi
+          DEPLOY_USER="${DEPLOY_USER:-kellyjcook}"
+          DEPLOY_HOST="${DEPLOY_HOST:-iad1-shared-b8-15.dreamhost.com}"
           sshpass -e rsync -avz --delete \
             --exclude ".git" \
             --exclude ".github" \
@@ -40,4 +44,4 @@ jobs:
             --exclude "*.md" \
             -e "ssh -o StrictHostKeyChecking=no" \
             ./ \
-            kellyjcook@iad1-shared-b8-15.dreamhost.com:$DEPLOY_PATH
+            "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}"

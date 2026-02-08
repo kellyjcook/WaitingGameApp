@@ -1,0 +1,68 @@
+name: Daily Changelog Email
+
+on:
+  schedule:
+    # Runs every day at 14:00 UTC (8 AM CST / 9 AM CDT)
+    - cron: '0 14 * * *'
+  workflow_dispatch: # Allow manual trigger for testing
+
+jobs:
+  send-changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Full history needed for git log
+
+      - name: Check for recent changes
+        id: changes
+        run: |
+          # Get commits from the last 24 hours
+          SINCE=$(date -u -d '24 hours ago' '+%Y-%m-%dT%H:%M:%SZ')
+          COMMITS=$(git log --since="$SINCE" --pretty=format:'- %s (%h by %an)' --no-merges 2>/dev/null || echo "")
+
+          if [ -z "$COMMITS" ]; then
+            echo "No commits in the last 24 hours. Skipping email."
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+
+            # Build the email body
+            TODAY=$(date -u '+%B %d, %Y')
+            FILES_CHANGED=$(git log --since="$SINCE" --pretty=format:'' --name-only --no-merges | sort -u | grep -v '^$' || echo "None")
+            COMMIT_COUNT=$(git log --since="$SINCE" --oneline --no-merges | wc -l | tr -d ' ')
+
+            # Use a heredoc to write the body to a file (avoids quoting issues)
+            cat > /tmp/email_body.txt << EMAILEOF
+            The Waiting Game — Daily Change Report for ${TODAY}
+
+            ${COMMIT_COUNT} change(s) deployed in the last 24 hours:
+
+            ${COMMITS}
+
+            Files affected:
+            ${FILES_CHANGED}
+
+            —
+            This is an automated notification from The Waiting Game CI/CD pipeline.
+            Repository: https://github.com/kellyjcook/WaitingGameApp
+            EMAILEOF
+
+            # Trim leading whitespace from heredoc indentation
+            sed -i 's/^            //' /tmp/email_body.txt
+          fi
+
+      - name: Send email notification
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: sub5.mail.dreamhost.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "The Waiting Game — Changes Deployed (${{ github.run_id }})"
+          to: ${{ secrets.NOTIFY_EMAIL }}
+          from: The Waiting Game <admin@waitinggameapp.com>
+          body: file:///tmp/email_body.txt

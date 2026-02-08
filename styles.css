@@ -817,6 +817,7 @@ button:active {
     display: none !important;
 }
 
+#settings-btn,
 #logout-btn {
     background: none;
     border: none;
@@ -831,10 +832,149 @@ button:active {
     border-radius: 4px;
 }
 
+#settings-btn:hover,
+#settings-btn:active,
 #logout-btn:hover,
 #logout-btn:active {
     opacity: 1;
     background: rgba(255,255,255,0.15);
+}
+
+#settings-btn {
+    font-size: 15px;
+}
+
+/* ── Account Settings Screen ─────────────────────────── */
+
+#account-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+    min-height: 100vh;
+}
+
+.account-container {
+    position: relative;
+    width: 100%;
+    max-width: 500px;
+    text-align: center;
+}
+
+.account-container h1 {
+    font-size: 1.8rem;
+    margin-bottom: 24px;
+}
+
+.account-section {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    padding: 20px 24px;
+    margin-bottom: 16px;
+    text-align: left;
+}
+
+.account-section h2 {
+    font-size: 1.15rem;
+    margin: 0 0 6px 0;
+    color: #202124;
+}
+
+.account-section-desc {
+    font-size: 0.9rem;
+    color: #5f6368;
+    margin: 0 0 14px 0;
+    line-height: 1.4;
+}
+
+.account-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.account-info-row:last-child {
+    border-bottom: none;
+}
+
+.account-label {
+    font-weight: 600;
+    color: #5f6368;
+    font-size: 0.9rem;
+}
+
+.account-value {
+    color: #202124;
+    font-size: 0.9rem;
+    text-align: right;
+    word-break: break-all;
+}
+
+.account-inline-form {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.account-inline-form input {
+    flex: 1;
+    padding: 10px 12px;
+    border: 2px solid #dadce0;
+    border-radius: 8px;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.account-inline-form input:focus {
+    border-color: #1a73e8;
+}
+
+.account-inline-form button {
+    padding: 10px 20px;
+    margin: 0;
+    font-size: 0.95rem;
+    white-space: nowrap;
+}
+
+.account-action-btn {
+    width: 100%;
+    padding: 12px 20px;
+    background: #1a73e8;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin: 0;
+}
+
+.account-action-btn:active {
+    background: #1557b0;
+}
+
+.account-action-btn:disabled {
+    background: #94bff8;
+    cursor: default;
+}
+
+.account-success {
+    background: #e6f4ea;
+    color: #137333;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    margin-bottom: 12px;
+    text-align: center;
+}
+
+.account-success.hidden {
+    display: none;
 }
 
 /* ── Custom Questions Screen ──────────────────────────── */
@@ -1198,5 +1338,17 @@ button:active {
     .share-code-display {
         font-size: 1.6rem;
         letter-spacing: 3px;
+    }
+
+    .account-container h1 {
+        font-size: 1.5rem;
+    }
+
+    .account-section {
+        padding: 16px 18px;
+    }
+
+    .account-inline-form {
+        flex-direction: column;
     }
 }

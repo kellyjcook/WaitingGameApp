@@ -1097,6 +1097,152 @@ function renderUnlockScreen() {
     });
 }
 
+// ── Resend Confirmation Email ─────────────────────────────────────
+
+async function resendConfirmationEmail() {
+    if (!supabaseClient || !currentUser) return { error: 'Not logged in' };
+    const email = currentUser.email;
+    if (!email) return { error: 'No email address on file' };
+
+    const { error } = await supabaseClient.auth.resend({
+        type: 'signup',
+        email
+    });
+    if (error) return { error: error.message };
+    return { success: true };
+}
+
+// ── Account Settings Screen ──────────────────────────────────────
+
+function renderAccountScreen() {
+    const screen = document.getElementById('account-screen');
+    if (!screen) return;
+    screen.innerHTML = `
+        <div class="account-container">
+            <button class="back-btn" id="account-back-btn">&#x2190;</button>
+            <h1>Account Settings</h1>
+            <div id="account-content"></div>
+        </div>
+    `;
+
+    document.getElementById('account-back-btn').addEventListener('click', () => {
+        showScreen('config-screen');
+    });
+}
+
+function renderAccountScreenContent() {
+    const content = document.getElementById('account-content');
+    if (!content || !currentUser) return;
+
+    const isUnlocked = currentUser.is_unlocked;
+    const email = currentUser.email || 'unknown';
+
+    content.innerHTML = `
+        <div class="account-section">
+            <div class="account-info-row">
+                <span class="account-label">Email</span>
+                <span class="account-value">${escapeHtml(email)}</span>
+            </div>
+            <div class="account-info-row">
+                <span class="account-label">Display Name</span>
+                <span class="account-value">${escapeHtml(currentUser.display_name || 'Player')}</span>
+            </div>
+            <div class="account-info-row">
+                <span class="account-label">Status</span>
+                <span class="account-value">${isUnlocked ? '&#x1f513; Unlocked' : '&#x1f512; Locked (Guest)'}</span>
+            </div>
+        </div>
+
+        ${!isUnlocked ? `
+        <div class="account-section">
+            <h2>Enter Unlock Code</h2>
+            <p class="account-section-desc">Enter your 8-digit code to unlock unlimited questions and Hard Mode.</p>
+            <div id="account-unlock-error" class="auth-error hidden"></div>
+            <div id="account-unlock-success" class="account-success hidden"></div>
+            <form id="account-unlock-form" class="account-inline-form">
+                <input type="text" id="account-unlock-code" placeholder="8-digit code"
+                       maxlength="8" pattern="[0-9]{8}" required
+                       inputmode="numeric" autocomplete="off"
+                       style="text-align:center; font-size:1.3rem; letter-spacing:3px">
+                <button type="submit">Unlock</button>
+            </form>
+        </div>
+        ` : ''}
+
+        <div class="account-section">
+            <h2>Resend Confirmation Email</h2>
+            <p class="account-section-desc">If you never received your email confirmation, or need a new one, click below.</p>
+            <div id="account-resend-error" class="auth-error hidden"></div>
+            <div id="account-resend-success" class="account-success hidden"></div>
+            <button id="account-resend-btn" class="account-action-btn">Resend Confirmation Email</button>
+        </div>
+    `;
+
+    // Resend email handler
+    const resendBtn = document.getElementById('account-resend-btn');
+    if (resendBtn) {
+        resendBtn.addEventListener('click', async () => {
+            resendBtn.disabled = true;
+            resendBtn.textContent = 'Sending...';
+            const errEl = document.getElementById('account-resend-error');
+            const successEl = document.getElementById('account-resend-success');
+            errEl.classList.add('hidden');
+            successEl.classList.add('hidden');
+
+            const result = await resendConfirmationEmail();
+            if (result.error) {
+                errEl.textContent = result.error;
+                errEl.classList.remove('hidden');
+                resendBtn.disabled = false;
+                resendBtn.textContent = 'Resend Confirmation Email';
+            } else {
+                successEl.textContent = 'Confirmation email sent! Check your inbox.';
+                successEl.classList.remove('hidden');
+                resendBtn.disabled = false;
+                resendBtn.textContent = 'Resend Confirmation Email';
+            }
+        });
+    }
+
+    // Unlock code handler (only shown for locked users)
+    const unlockForm = document.getElementById('account-unlock-form');
+    if (unlockForm) {
+        unlockForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = unlockForm.querySelector('button');
+            btn.disabled = true;
+            btn.textContent = 'Validating...';
+            const errEl = document.getElementById('account-unlock-error');
+            const successEl = document.getElementById('account-unlock-success');
+            errEl.classList.add('hidden');
+            successEl.classList.add('hidden');
+
+            const code = document.getElementById('account-unlock-code').value.trim();
+            const result = await redeemUnlockKey(code);
+
+            if (result.error) {
+                errEl.textContent = result.error;
+                errEl.classList.remove('hidden');
+                btn.disabled = false;
+                btn.textContent = 'Unlock';
+            } else {
+                successEl.textContent = 'Unlocked! You now have full access to all questions.';
+                successEl.classList.remove('hidden');
+                btn.disabled = false;
+                btn.textContent = 'Unlock';
+                // Refresh the badge to show unlocked status
+                renderUserBadge();
+                // Re-render the content to hide the unlock section
+                setTimeout(() => {
+                    renderAccountScreenContent();
+                    // Also refresh the question set selector on config screen
+                    populateQuestionSetSelector();
+                }, 1500);
+            }
+        });
+    }
+}
+
 // ── Screen Management ──────────────────────────────────────────────
 
 function showScreen(id) {
@@ -1105,7 +1251,7 @@ function showScreen(id) {
     if (target) target.classList.remove('hidden');
 
     // Landing page needs scrolling; game screens need overflow:hidden
-    const scrollableScreens = ['landing-screen', 'auth-screen', 'confirm-screen', 'unlock-screen', 'questions-screen'];
+    const scrollableScreens = ['landing-screen', 'auth-screen', 'confirm-screen', 'unlock-screen', 'questions-screen', 'account-screen'];
     if (scrollableScreens.includes(id)) {
         document.body.classList.add('allow-scroll');
         window.scrollTo(0, 0);
@@ -1169,8 +1315,15 @@ function renderUserBadge() {
     }
     if (currentUser) {
         const lockIcon = currentUser.is_unlocked ? '&#x1f513;' : '&#x1f512;';
-        badge.innerHTML = `${lockIcon} ${currentUser.display_name} <button id="logout-btn" title="Sign out">&#x2715;</button>`;
+        badge.innerHTML = `${lockIcon} ${currentUser.display_name} <button id="settings-btn" title="Account settings">&#x2699;</button><button id="logout-btn" title="Sign out">&#x2715;</button>`;
         badge.classList.remove('hidden');
+        const settingsBtn = document.getElementById('settings-btn');
+        if (settingsBtn) {
+            settingsBtn.addEventListener('click', () => {
+                renderAccountScreenContent();
+                showScreen('account-screen');
+            });
+        }
         const logoutBtn = document.getElementById('logout-btn');
         if (logoutBtn) {
             logoutBtn.addEventListener('click', async () => {
@@ -1197,6 +1350,7 @@ async function bootAuth() {
     renderAuthScreen();
     renderUnlockScreen();
     renderQuestionsScreen();
+    renderAccountScreen();
 
     // Check for existing session
     const user = await checkSession();

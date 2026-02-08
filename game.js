@@ -176,15 +176,49 @@ async function initGameFromConfig() {
     gameState.questionIndex = 0;
     gameState.players = [];
 
-    // Prepare questions — respects unlock status and hard mode
-    const questionsFile = (typeof getQuestionFile === 'function') ? getQuestionFile() :
-        ((hardModeCheckbox && hardModeCheckbox.checked) ? 'hard+questions.json' : 'questions.json');
-    try {
-        const res = await fetch(questionsFile, { cache: 'no-store' });
-        const data = await res.json();
-        gameState.questions = Array.isArray(data) ? data : [];
-    } catch (e) {
-        gameState.questions = [];
+    // Prepare questions — respects unlock status, custom sets, and hard mode
+    let questionsLoaded = false;
+
+    // Try the new getQuestionSource() first, fall back to getQuestionFile()
+    if (typeof getQuestionSource === 'function') {
+        const source = getQuestionSource();
+        if (source.type === 'custom' && source.setId && typeof loadQuestionSetItems === 'function') {
+            try {
+                const { data: items, error } = await loadQuestionSetItems(source.setId);
+                if (!error && items && items.length > 0) {
+                    gameState.questions = items.map(item => ({
+                        question: item.question,
+                        answer: item.answer
+                    }));
+                    questionsLoaded = true;
+                }
+            } catch (e) {
+                console.warn('Failed to load custom questions, falling back to built-in', e);
+            }
+        }
+        if (!questionsLoaded && source.type === 'file') {
+            try {
+                const res = await fetch(source.file, { cache: 'no-store' });
+                const data = await res.json();
+                gameState.questions = Array.isArray(data) ? data : [];
+                questionsLoaded = true;
+            } catch (e) {
+                gameState.questions = [];
+            }
+        }
+    }
+
+    // Final fallback: use getQuestionFile() or default
+    if (!questionsLoaded) {
+        const questionsFile = (typeof getQuestionFile === 'function') ? getQuestionFile() :
+            ((hardModeCheckbox && hardModeCheckbox.checked) ? 'hard+questions.json' : 'questions.json');
+        try {
+            const res = await fetch(questionsFile, { cache: 'no-store' });
+            const data = await res.json();
+            gameState.questions = Array.isArray(data) ? data : [];
+        } catch (e) {
+            gameState.questions = [];
+        }
     }
     gameState.questions = shuffleArray([...gameState.questions]);
 

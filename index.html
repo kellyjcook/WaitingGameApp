@@ -29,6 +29,11 @@
             <!-- Populated by auth.js renderUnlockScreen() -->
         </div>
 
+        <!-- Custom Questions Management Screen (unlocked users only) -->
+        <div id="questions-screen" class="screen hidden">
+            <!-- Populated by auth.js renderQuestionsScreen() -->
+        </div>
+
         <div id="config-screen" class="screen hidden">
             <h1>Welcome to The Waiting Game</h1>
             <p>Test your knowledge and timing skills!</p>
@@ -53,6 +58,15 @@
                 <div class="config-row">
                     <label for="hard-mode">Hard Mode</label>
                     <input type="checkbox" id="hard-mode">
+                </div>
+                <div id="question-set-row" class="config-row" style="display:none">
+                    <label for="question-set-select">Questions</label>
+                    <div style="display:flex;gap:8px;flex:1;align-items:center">
+                        <select id="question-set-select" style="flex:1">
+                            <option value="">Built-in Questions</option>
+                        </select>
+                        <button id="manage-questions-btn" type="button" style="margin:0;padding:10px 16px;font-size:0.9rem;white-space:nowrap">Manage</button>
+                    </div>
                 </div>
                 <button id="start-btn">Start Game</button>
             </div>

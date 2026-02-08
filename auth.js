@@ -132,7 +132,7 @@ async function loadPreferences() {
     if (!currentUser) return null;
     const { data } = await supabaseClient
         .from('user_preferences')
-        .select('default_player_count, player_names, hard_mode')
+        .select('default_player_count, player_names, hard_mode, active_question_set')
         .eq('user_id', currentUser.id)
         .single();
     return data;
@@ -144,6 +144,645 @@ async function savePreferences(prefs) {
         .from('user_preferences')
         .update({ ...prefs, updated_at: new Date().toISOString() })
         .eq('user_id', currentUser.id);
+}
+
+// ── Custom Question Sets ──────────────────────────────────────────
+
+function generateRandomCode(length = 8) {
+    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L
+    let code = '';
+    for (let i = 0; i < length; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+}
+
+async function loadQuestionSets() {
+    if (!currentUser) return { data: [], error: 'Not logged in' };
+    const { data, error } = await supabaseClient
+        .from('question_sets')
+        .select('id, name, share_code, question_count, created_at')
+        .eq('owner_id', currentUser.id)
+        .order('created_at', { ascending: false });
+    return { data: data || [], error: error ? error.message : null };
+}
+
+async function createQuestionSet(name) {
+    if (!currentUser) return { error: 'Not logged in' };
+    const { data, error } = await supabaseClient
+        .from('question_sets')
+        .insert({ owner_id: currentUser.id, name })
+        .select()
+        .single();
+    return { data, error: error ? error.message : null };
+}
+
+async function deleteQuestionSet(setId) {
+    if (!currentUser) return { error: 'Not logged in' };
+    // Clear active_question_set if it points to the deleted set
+    const sel = document.getElementById('question-set-select');
+    if (sel && sel.value === setId) {
+        await setActiveQuestionSet(null);
+    }
+    const { error } = await supabaseClient
+        .from('question_sets')
+        .delete()
+        .eq('id', setId)
+        .eq('owner_id', currentUser.id);
+    return { error: error ? error.message : null };
+}
+
+async function renameQuestionSet(setId, newName) {
+    if (!currentUser) return { error: 'Not logged in' };
+    const { error } = await supabaseClient
+        .from('question_sets')
+        .update({ name: newName, updated_at: new Date().toISOString() })
+        .eq('id', setId)
+        .eq('owner_id', currentUser.id);
+    return { error: error ? error.message : null };
+}
+
+async function loadQuestionSetItems(setId) {
+    const { data, error } = await supabaseClient
+        .from('question_set_items')
+        .select('id, question, answer, sort_order')
+        .eq('set_id', setId)
+        .order('sort_order', { ascending: true });
+    return { data: data || [], error: error ? error.message : null };
+}
+
+async function addQuestionToSet(setId, questionText, answer) {
+    if (!currentUser) return { error: 'Not logged in' };
+    // Get current max sort_order
+    const { data: existing } = await supabaseClient
+        .from('question_set_items')
+        .select('sort_order')
+        .eq('set_id', setId)
+        .order('sort_order', { ascending: false })
+        .limit(1);
+    const nextOrder = (existing && existing.length > 0) ? existing[0].sort_order + 1 : 0;
+
+    const { data, error } = await supabaseClient
+        .from('question_set_items')
+        .insert({ set_id: setId, question: questionText, answer, sort_order: nextOrder })
+        .select()
+        .single();
+
+    if (!error) {
+        // Update question count on the set
+        await supabaseClient.rpc('', {}).catch(() => {}); // no-op, update count manually
+        const { data: countData } = await supabaseClient
+            .from('question_set_items')
+            .select('id', { count: 'exact', head: true })
+            .eq('set_id', setId);
+        // Use the count from the response headers if available
+        await supabaseClient
+            .from('question_sets')
+            .update({ question_count: nextOrder + 1, updated_at: new Date().toISOString() })
+            .eq('id', setId);
+    }
+
+    return { data, error: error ? error.message : null };
+}
+
+async function updateQuestionInSet(itemId, questionText, answer) {
+    if (!currentUser) return { error: 'Not logged in' };
+    const { error } = await supabaseClient
+        .from('question_set_items')
+        .update({ question: questionText, answer })
+        .eq('id', itemId);
+    return { error: error ? error.message : null };
+}
+
+async function deleteQuestionFromSet(itemId, setId) {
+    if (!currentUser) return { error: 'Not logged in' };
+    const { error } = await supabaseClient
+        .from('question_set_items')
+        .delete()
+        .eq('id', itemId);
+
+    if (!error && setId) {
+        // Update question count
+        const { data: items } = await supabaseClient
+            .from('question_set_items')
+            .select('id')
+            .eq('set_id', setId);
+        await supabaseClient
+            .from('question_sets')
+            .update({ question_count: items ? items.length : 0, updated_at: new Date().toISOString() })
+            .eq('id', setId);
+    }
+
+    return { error: error ? error.message : null };
+}
+
+async function generateShareCode(setId) {
+    if (!currentUser) return { error: 'Not logged in' };
+    const code = generateRandomCode(8);
+    const { error } = await supabaseClient
+        .from('question_sets')
+        .update({ share_code: code })
+        .eq('id', setId)
+        .eq('owner_id', currentUser.id);
+    if (error) {
+        // Retry once in case of unique constraint collision
+        const code2 = generateRandomCode(8);
+        const { error: err2 } = await supabaseClient
+            .from('question_sets')
+            .update({ share_code: code2 })
+            .eq('id', setId)
+            .eq('owner_id', currentUser.id);
+        if (err2) return { error: err2.message };
+        return { code: code2 };
+    }
+    return { code };
+}
+
+async function revokeShareCode(setId) {
+    if (!currentUser) return { error: 'Not logged in' };
+    const { error } = await supabaseClient
+        .from('question_sets')
+        .update({ share_code: null })
+        .eq('id', setId)
+        .eq('owner_id', currentUser.id);
+    return { error: error ? error.message : null };
+}
+
+async function importQuestionSet(shareCode) {
+    if (!currentUser) return { error: 'Not logged in' };
+
+    // Find the shared set
+    const { data: sets, error: findErr } = await supabaseClient
+        .from('question_sets')
+        .select('id, name, question_count')
+        .eq('share_code', shareCode.trim().toUpperCase())
+        .limit(1);
+
+    if (findErr || !sets || sets.length === 0) return { error: 'No question set found with that code' };
+    const sourceSet = sets[0];
+
+    // Load all questions from the shared set
+    const { data: items, error: itemsErr } = await supabaseClient
+        .from('question_set_items')
+        .select('question, answer, sort_order')
+        .eq('set_id', sourceSet.id)
+        .order('sort_order', { ascending: true });
+
+    if (itemsErr) return { error: 'Failed to load questions from shared set' };
+    if (!items || items.length === 0) return { error: 'The shared set has no questions' };
+
+    // Create a new set owned by the current user
+    const importName = `Imported: ${sourceSet.name}`.substring(0, 60);
+    const { data: newSet, error: createErr } = await supabaseClient
+        .from('question_sets')
+        .insert({ owner_id: currentUser.id, name: importName, question_count: items.length })
+        .select()
+        .single();
+
+    if (createErr || !newSet) return { error: 'Failed to create imported set' };
+
+    // Bulk insert all questions
+    const newItems = items.map(item => ({
+        set_id: newSet.id,
+        question: item.question,
+        answer: item.answer,
+        sort_order: item.sort_order
+    }));
+    const { error: insertErr } = await supabaseClient
+        .from('question_set_items')
+        .insert(newItems);
+
+    if (insertErr) return { error: 'Set created but failed to copy some questions' };
+
+    return { data: { newSetId: newSet.id, name: importName, questionCount: items.length } };
+}
+
+async function setActiveQuestionSet(setId) {
+    if (!currentUser) return { error: 'Not logged in' };
+    const { error } = await supabaseClient
+        .from('user_preferences')
+        .update({ active_question_set: setId, updated_at: new Date().toISOString() })
+        .eq('user_id', currentUser.id);
+    window._activeQuestionSet = setId || null;
+    return { error: error ? error.message : null };
+}
+
+// ── Custom Questions UI ──────────────────────────────────────────
+
+function renderQuestionsScreen() {
+    const screen = document.getElementById('questions-screen');
+    if (!screen) return;
+    // Initial render: will be populated by showQuestionSetList()
+    screen.innerHTML = '<div class="questions-loading">Loading...</div>';
+}
+
+async function showQuestionSetList() {
+    const screen = document.getElementById('questions-screen');
+    if (!screen) return;
+
+    const { data: sets } = await loadQuestionSets();
+
+    let setsHtml = '';
+    if (sets.length === 0) {
+        setsHtml = `<div class="qset-empty-state">
+            <p>You haven't created any question sets yet.</p>
+            <p>Create your own trivia questions or import a set from a friend!</p>
+        </div>`;
+    } else {
+        setsHtml = `<div class="qset-list">${sets.map(s => `
+            <div class="qset-card" data-set-id="${s.id}">
+                <div class="qset-card-info">
+                    <div class="qset-card-name">${escapeHtml(s.name)}</div>
+                    <div class="qset-card-meta">${s.question_count} question${s.question_count !== 1 ? 's' : ''}${s.share_code ? ' &middot; Shared' : ''}</div>
+                </div>
+                <div class="qset-card-actions">
+                    <button class="qset-edit-btn" data-set-id="${s.id}">Edit</button>
+                    <button class="qset-delete-btn delete-btn" data-set-id="${s.id}" data-set-name="${escapeHtml(s.name)}">&#x2715;</button>
+                </div>
+            </div>
+        `).join('')}</div>`;
+    }
+
+    screen.innerHTML = `
+        <div class="questions-header">
+            <button id="questions-back-btn" class="back-btn" title="Back to game setup">&#x2190;</button>
+            <h1>My Questions</h1>
+        </div>
+        <div class="qset-actions-bar">
+            <button id="qset-create-btn">Create New Set</button>
+            <button id="qset-import-btn" class="btn-secondary">Import Set</button>
+        </div>
+        <div id="qset-inline-form" class="hidden"></div>
+        <div id="qset-message" class="hidden"></div>
+        ${setsHtml}
+    `;
+
+    // Back button
+    document.getElementById('questions-back-btn').addEventListener('click', () => {
+        showScreen('config-screen');
+        populateQuestionSetSelector();
+    });
+
+    // Create button
+    document.getElementById('qset-create-btn').addEventListener('click', () => {
+        const form = document.getElementById('qset-inline-form');
+        form.classList.remove('hidden');
+        form.innerHTML = `
+            <div class="auth-card" style="margin-top:0">
+                <form id="qset-create-form" class="auth-form">
+                    <input type="text" id="qset-new-name" placeholder="Set name (e.g. Geography)" maxlength="60" required>
+                    <div style="display:flex;gap:8px">
+                        <button type="submit" style="flex:1;margin:0">Create</button>
+                        <button type="button" id="qset-create-cancel" class="btn-secondary" style="flex:0;margin:0">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        `;
+        document.getElementById('qset-new-name').focus();
+        document.getElementById('qset-create-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('qset-new-name').value.trim();
+            if (!name) return;
+            const btn = e.target.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            btn.textContent = 'Creating...';
+            const result = await createQuestionSet(name);
+            if (result.error) {
+                showQsetMessage(result.error, 'error');
+                btn.disabled = false;
+                btn.textContent = 'Create';
+            } else {
+                await showQuestionSetList();
+            }
+        });
+        document.getElementById('qset-create-cancel').addEventListener('click', () => {
+            form.classList.add('hidden');
+            form.innerHTML = '';
+        });
+    });
+
+    // Import button
+    document.getElementById('qset-import-btn').addEventListener('click', () => {
+        const form = document.getElementById('qset-inline-form');
+        form.classList.remove('hidden');
+        form.innerHTML = `
+            <div class="auth-card" style="margin-top:0">
+                <form id="qset-import-form" class="auth-form">
+                    <input type="text" id="qset-import-code" placeholder="8-character share code"
+                           maxlength="8" required autocomplete="off"
+                           style="text-align:center; font-size:1.3rem; letter-spacing:3px; text-transform:uppercase">
+                    <div style="display:flex;gap:8px">
+                        <button type="submit" style="flex:1;margin:0">Import</button>
+                        <button type="button" id="qset-import-cancel" class="btn-secondary" style="flex:0;margin:0">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        `;
+        document.getElementById('qset-import-code').focus();
+        document.getElementById('qset-import-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const code = document.getElementById('qset-import-code').value.trim();
+            if (!code) return;
+            const btn = e.target.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            btn.textContent = 'Importing...';
+            const result = await importQuestionSet(code);
+            if (result.error) {
+                showQsetMessage(result.error, 'error');
+                btn.disabled = false;
+                btn.textContent = 'Import';
+            } else {
+                showQsetMessage(`Imported "${result.data.name}" with ${result.data.questionCount} questions!`, 'success');
+                await showQuestionSetList();
+            }
+        });
+        document.getElementById('qset-import-cancel').addEventListener('click', () => {
+            form.classList.add('hidden');
+            form.innerHTML = '';
+        });
+    });
+
+    // Edit buttons
+    screen.querySelectorAll('.qset-edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => renderSetEditor(btn.dataset.setId));
+    });
+
+    // Delete buttons
+    screen.querySelectorAll('.qset-delete-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const name = btn.dataset.setName;
+            if (!confirm(`Delete "${name}" and all its questions? This cannot be undone.`)) return;
+            btn.disabled = true;
+            const result = await deleteQuestionSet(btn.dataset.setId);
+            if (result.error) {
+                showQsetMessage(result.error, 'error');
+                btn.disabled = false;
+            } else {
+                await showQuestionSetList();
+            }
+        });
+    });
+}
+
+async function renderSetEditor(setId) {
+    const screen = document.getElementById('questions-screen');
+    if (!screen) return;
+
+    // Load set info and items
+    const { data: sets } = await supabaseClient
+        .from('question_sets')
+        .select('id, name, share_code, question_count')
+        .eq('id', setId)
+        .single();
+
+    if (!sets) {
+        showQsetMessage('Question set not found', 'error');
+        await showQuestionSetList();
+        return;
+    }
+
+    const setInfo = sets;
+    const { data: items } = await loadQuestionSetItems(setId);
+
+    let itemsHtml = '';
+    if (items.length === 0) {
+        itemsHtml = '<div class="qset-empty-state"><p>No questions yet. Add your first question below!</p></div>';
+    } else {
+        itemsHtml = items.map((item, idx) => `
+            <div class="question-item" data-item-id="${item.id}">
+                <span class="question-item-num">${idx + 1}</span>
+                <span class="question-item-text">${escapeHtml(item.question)}</span>
+                <span class="question-item-answer">${item.answer}s</span>
+                <div class="question-item-actions">
+                    <button class="qi-edit-btn" data-item-id="${item.id}" data-q="${escapeAttr(item.question)}" data-a="${item.answer}">Edit</button>
+                    <button class="qi-delete-btn delete-btn" data-item-id="${item.id}">&#x2715;</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // Share section
+    let shareHtml = '';
+    if (setInfo.share_code) {
+        shareHtml = `
+            <div class="share-section">
+                <div class="share-code-display">${setInfo.share_code}</div>
+                <p style="font-size:0.85rem;color:#5f6368;margin:0 0 8px">Share this code with others to let them import your questions</p>
+                <button id="copy-share-code" class="btn-secondary" style="margin:0 4px 0 0">Copy Code</button>
+                <button id="revoke-share-code" class="btn-danger" style="margin:0">Stop Sharing</button>
+            </div>
+        `;
+    } else {
+        shareHtml = `<button id="generate-share-code" class="btn-secondary">Share This Set</button>`;
+    }
+
+    screen.innerHTML = `
+        <div class="questions-header">
+            <button id="set-editor-back-btn" class="back-btn" title="Back to set list">&#x2190;</button>
+            <h1>${escapeHtml(setInfo.name)}</h1>
+        </div>
+        <div class="set-editor-meta">${items.length} question${items.length !== 1 ? 's' : ''}</div>
+
+        <div class="auth-card set-editor-add" style="max-width:600px">
+            <h3 style="margin-bottom:12px;color:#1a73e8;font-size:1rem">Add Question</h3>
+            <form id="add-question-form" class="auth-form">
+                <input type="text" id="new-question-text" placeholder="Question text" maxlength="500" required>
+                <div style="display:flex;gap:8px;align-items:center">
+                    <label style="font-weight:600;color:#202124;white-space:nowrap">Answer (1-30):</label>
+                    <input type="number" id="new-question-answer" min="1" max="30" required
+                           style="width:80px;padding:10px 12px;border:2px solid #dadce0;border-radius:8px;font-size:1rem;text-align:center">
+                    <button type="submit" style="margin:0;flex:1">Add</button>
+                </div>
+            </form>
+        </div>
+
+        <div id="qset-message" class="hidden"></div>
+        <div id="qset-items-list" style="width:100%;max-width:600px">
+            ${itemsHtml}
+        </div>
+
+        <div class="auth-card" style="max-width:600px;margin-top:20px">
+            <h3 style="margin-bottom:12px;color:#1a73e8;font-size:1rem">Sharing</h3>
+            ${shareHtml}
+        </div>
+
+        <div style="max-width:600px;width:100%;margin-top:16px;text-align:center">
+            <button id="delete-set-btn" class="btn-danger">Delete This Set</button>
+        </div>
+    `;
+
+    // Back button
+    document.getElementById('set-editor-back-btn').addEventListener('click', () => showQuestionSetList());
+
+    // Add question form
+    document.getElementById('add-question-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const text = document.getElementById('new-question-text').value.trim();
+        const answer = parseInt(document.getElementById('new-question-answer').value, 10);
+        if (!text || isNaN(answer) || answer < 1 || answer > 30) return;
+        const btn = e.target.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        btn.textContent = 'Adding...';
+        const result = await addQuestionToSet(setId, text, answer);
+        if (result.error) {
+            showQsetMessage(result.error, 'error');
+            btn.disabled = false;
+            btn.textContent = 'Add';
+        } else {
+            await renderSetEditor(setId);
+        }
+    });
+
+    // Edit/delete question buttons
+    screen.querySelectorAll('.qi-edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const itemId = btn.dataset.itemId;
+            const q = btn.dataset.q;
+            const a = btn.dataset.a;
+            const row = btn.closest('.question-item');
+            row.innerHTML = `
+                <form class="qi-edit-form" style="display:flex;gap:6px;align-items:center;flex:1">
+                    <input type="text" class="qi-edit-text" value="${escapeAttr(q)}" maxlength="500" required style="flex:1;padding:8px 10px;border:2px solid #1a73e8;border-radius:6px;font-size:0.9rem">
+                    <input type="number" class="qi-edit-answer" value="${a}" min="1" max="30" required style="width:60px;padding:8px;border:2px solid #1a73e8;border-radius:6px;font-size:0.9rem;text-align:center">
+                    <button type="submit" style="margin:0;padding:6px 12px;font-size:0.85rem">Save</button>
+                    <button type="button" class="qi-edit-cancel btn-secondary" style="margin:0;padding:6px 10px;font-size:0.85rem">&#x2715;</button>
+                </form>
+            `;
+            row.querySelector('.qi-edit-form').addEventListener('submit', async (e2) => {
+                e2.preventDefault();
+                const newText = row.querySelector('.qi-edit-text').value.trim();
+                const newAnswer = parseInt(row.querySelector('.qi-edit-answer').value, 10);
+                if (!newText || isNaN(newAnswer) || newAnswer < 1 || newAnswer > 30) return;
+                const result = await updateQuestionInSet(itemId, newText, newAnswer);
+                if (result.error) {
+                    showQsetMessage(result.error, 'error');
+                } else {
+                    await renderSetEditor(setId);
+                }
+            });
+            row.querySelector('.qi-edit-cancel').addEventListener('click', () => renderSetEditor(setId));
+        });
+    });
+
+    screen.querySelectorAll('.qi-delete-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            const result = await deleteQuestionFromSet(btn.dataset.itemId, setId);
+            if (result.error) {
+                showQsetMessage(result.error, 'error');
+                btn.disabled = false;
+            } else {
+                await renderSetEditor(setId);
+            }
+        });
+    });
+
+    // Share controls
+    const genBtn = document.getElementById('generate-share-code');
+    if (genBtn) {
+        genBtn.addEventListener('click', async () => {
+            genBtn.disabled = true;
+            genBtn.textContent = 'Generating...';
+            const result = await generateShareCode(setId);
+            if (result.error) {
+                showQsetMessage(result.error, 'error');
+                genBtn.disabled = false;
+                genBtn.textContent = 'Share This Set';
+            } else {
+                await renderSetEditor(setId);
+            }
+        });
+    }
+
+    const copyBtn = document.getElementById('copy-share-code');
+    if (copyBtn) {
+        copyBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(setInfo.share_code).then(() => {
+                copyBtn.textContent = 'Copied!';
+                setTimeout(() => { copyBtn.textContent = 'Copy Code'; }, 2000);
+            }).catch(() => {
+                copyBtn.textContent = 'Copy failed';
+            });
+        });
+    }
+
+    const revokeBtn = document.getElementById('revoke-share-code');
+    if (revokeBtn) {
+        revokeBtn.addEventListener('click', async () => {
+            revokeBtn.disabled = true;
+            const result = await revokeShareCode(setId);
+            if (result.error) {
+                showQsetMessage(result.error, 'error');
+                revokeBtn.disabled = false;
+            } else {
+                await renderSetEditor(setId);
+            }
+        });
+    }
+
+    // Delete set
+    document.getElementById('delete-set-btn').addEventListener('click', async () => {
+        if (!confirm(`Delete "${setInfo.name}" and all its questions? This cannot be undone.`)) return;
+        const result = await deleteQuestionSet(setId);
+        if (result.error) {
+            showQsetMessage(result.error, 'error');
+        } else {
+            await showQuestionSetList();
+        }
+    });
+}
+
+async function populateQuestionSetSelector() {
+    const row = document.getElementById('question-set-row');
+    const sel = document.getElementById('question-set-select');
+    const hardMode = document.getElementById('hard-mode');
+    if (!row || !sel) return;
+
+    // Only show for unlocked users
+    if (!currentUser || !currentUser.is_unlocked) {
+        row.style.display = 'none';
+        return;
+    }
+    row.style.display = '';
+
+    const { data: sets } = await loadQuestionSets();
+    const currentActive = window._activeQuestionSet || '';
+
+    // Preserve built-in option, rebuild the rest
+    sel.innerHTML = '<option value="">Built-in Questions</option>';
+    sets.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = `${s.name} (${s.question_count})`;
+        if (s.id === currentActive) opt.selected = true;
+        sel.appendChild(opt);
+    });
+
+    // Toggle hard mode availability
+    if (hardMode) {
+        hardMode.disabled = !!sel.value;
+        if (sel.value) hardMode.parentElement.style.opacity = '0.5';
+        else hardMode.parentElement.style.opacity = '1';
+    }
+}
+
+function showQsetMessage(msg, type) {
+    const el = document.getElementById('qset-message');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = type === 'error' ? 'qset-message qset-message-error' : 'qset-message qset-message-success';
+    el.classList.remove('hidden');
+    setTimeout(() => el.classList.add('hidden'), 4000);
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function escapeAttr(str) {
+    return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // ── Landing Page ──────────────────────────────────────────────────
@@ -466,7 +1105,7 @@ function showScreen(id) {
     if (target) target.classList.remove('hidden');
 
     // Landing page needs scrolling; game screens need overflow:hidden
-    const scrollableScreens = ['landing-screen', 'auth-screen', 'confirm-screen', 'unlock-screen'];
+    const scrollableScreens = ['landing-screen', 'auth-screen', 'confirm-screen', 'unlock-screen', 'questions-screen'];
     if (scrollableScreens.includes(id)) {
         document.body.classList.add('allow-scroll');
         window.scrollTo(0, 0);
@@ -481,6 +1120,8 @@ async function onAuthSuccess() {
     if (prefs) {
         applyPreferencesToConfig(prefs);
     }
+    // Populate the question set dropdown for unlocked users
+    await populateQuestionSetSelector();
     showScreen('config-screen');
     renderUserBadge();
 }
@@ -504,6 +1145,18 @@ function applyPreferencesToConfig(prefs) {
     const hardMode = document.getElementById('hard-mode');
     if (hardMode && typeof prefs.hard_mode === 'boolean') {
         hardMode.checked = prefs.hard_mode;
+    }
+    // Set active question set global (used by getQuestionSource in profile.js)
+    window._activeQuestionSet = prefs.active_question_set || null;
+    // Show/hide the question set row based on unlock status
+    const qsetRow = document.getElementById('question-set-row');
+    if (qsetRow) {
+        qsetRow.style.display = (currentUser && currentUser.is_unlocked) ? '' : 'none';
+    }
+    // Set the selector value if a custom set is active
+    const sel = document.getElementById('question-set-select');
+    if (sel && prefs.active_question_set) {
+        sel.value = prefs.active_question_set;
     }
 }
 
@@ -543,6 +1196,7 @@ async function bootAuth() {
     renderLandingScreen();
     renderAuthScreen();
     renderUnlockScreen();
+    renderQuestionsScreen();
 
     // Check for existing session
     const user = await checkSession();

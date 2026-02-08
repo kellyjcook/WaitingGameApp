@@ -79,7 +79,8 @@ CREATE POLICY "Users can check key validity"
 
 CREATE POLICY "Users can redeem a key"
     ON unlock_keys FOR UPDATE
-    USING (auth.uid() IS NOT NULL AND redeemed_by IS NULL);
+    USING (auth.uid() IS NOT NULL AND redeemed_by IS NULL)
+    WITH CHECK (auth.uid() IS NOT NULL);
 
 -- Function to handle new user signup: auto-create profile + preferences rows
 -- Uses SECURITY DEFINER to bypass RLS (trigger runs as DB owner)

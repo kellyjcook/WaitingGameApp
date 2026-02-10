@@ -33,24 +33,16 @@ jobs:
             FILES_CHANGED=$(git log --since="$SINCE" --pretty=format:'' --name-only --no-merges | sort -u | grep -v '^$' || echo "None")
             COMMIT_COUNT=$(git log --since="$SINCE" --oneline --no-merges | wc -l | tr -d ' ')
 
-            # Use a heredoc to write the body to a file (avoids quoting issues)
-            cat > /tmp/email_body.txt << EMAILEOF
-            The Waiting Game — Daily Change Report for ${TODAY}
-
-            ${COMMIT_COUNT} change(s) deployed in the last 24 hours:
-
-            ${COMMITS}
-
-            Files affected:
-            ${FILES_CHANGED}
-
-            —
-            This is an automated notification from The Waiting Game CI/CD pipeline.
-            Repository: https://github.com/kellyjcook/WaitingGameApp
-            EMAILEOF
-
-            # Trim leading whitespace from heredoc indentation
-            sed -i 's/^            //' /tmp/email_body.txt
+            # Build email body using printf (avoids heredoc indentation issues in YAML)
+            {
+              printf "The Waiting Game — Daily Change Report for %s\n\n" "$TODAY"
+              printf "%s change(s) deployed in the last 24 hours:\n\n" "$COMMIT_COUNT"
+              printf "%s\n\n" "$COMMITS"
+              printf "Files affected:\n%s\n\n" "$FILES_CHANGED"
+              printf "—\n"
+              printf "This is an automated notification from The Waiting Game CI/CD pipeline.\n"
+              printf "Repository: https://github.com/kellyjcook/WaitingGameApp\n"
+            } > /tmp/email_body.txt
           fi
 
       - name: Send email notification

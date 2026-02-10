@@ -15,79 +15,145 @@ function initSupabase() {
     return true;
 }
 
+// ── Centralized Error Logging ──────────────────────────────────────
+// Fire-and-forget: logs to console + Supabase error_logs table.
+// Never awaits, never throws — safe to call anywhere.
+
+function logError(source, message, context = {}, severity = 'error') {
+    try {
+        const logFn = severity === 'warn' ? console.warn : console.error;
+        logFn(`[${source}]`, message, context);
+        if (supabaseClient) {
+            supabaseClient.from('error_logs').insert({
+                user_id: currentUser?.id || null,
+                error_source: source,
+                error_message: String(message).slice(0, 2000),
+                error_context: {
+                    ...context,
+                    url: window.location.href,
+                    timestamp: new Date().toISOString()
+                },
+                severity
+            }).then(null, () => {}); // swallow insert errors
+        }
+    } catch (_) { /* logging must never throw */ }
+}
+
 // ── Auth State ─────────────────────────────────────────────────────
 
 async function checkSession() {
     if (!supabaseClient) return null;
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if (session) {
-        await loadProfile(session.user.id);
-        return currentUser;
+    try {
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
+        if (error) {
+            logError('auth.js:checkSession', error.message);
+            return null;
+        }
+        if (session) {
+            await loadProfile(session.user.id);
+            return currentUser;
+        }
+        return null;
+    } catch (err) {
+        logError('auth.js:checkSession', err.message, { stack: err.stack });
+        return null;
     }
-    return null;
 }
 
 async function loadProfile(userId) {
-    const { data, error } = await supabaseClient
-        .from('profiles')
-        .select('id, display_name, email, location, is_unlocked')
-        .eq('id', userId)
-        .single();
-    if (data) {
-        currentUser = data;
+    try {
+        const { data, error } = await supabaseClient
+            .from('profiles')
+            .select('id, display_name, email, location, is_unlocked')
+            .eq('id', userId)
+            .single();
+        if (error) {
+            logError('auth.js:loadProfile', error.message, { userId });
+            return null;
+        }
+        if (data) {
+            currentUser = data;
+        }
+        return data;
+    } catch (err) {
+        logError('auth.js:loadProfile', err.message, { userId, stack: err.stack });
+        return null;
     }
-    return data;
 }
 
 // ── Registration ───────────────────────────────────────────────────
 
 async function registerUser(email, password, displayName, location) {
-    const { data, error } = await supabaseClient.auth.signUp({
-        email,
-        password,
-        options: {
-            data: { display_name: displayName }
+    try {
+        const { data, error } = await supabaseClient.auth.signUp({
+            email,
+            password,
+            options: {
+                data: { display_name: displayName }
+            }
+        });
+        if (error) {
+            logError('auth.js:registerUser', error.message, { email }, 'warn');
+            return { error: error.message };
         }
-    });
-    if (error) return { error: error.message };
 
-    // Check if email confirmation is required
-    // Supabase returns identities=[] when email confirmation is pending
-    const needsConfirmation = data.user && (!data.user.identities || data.user.identities.length === 0)
-        || (data.user && !data.session);
+        // Check if email confirmation is required
+        // Supabase returns identities=[] when email confirmation is pending
+        const needsConfirmation = data.user && (!data.user.identities || data.user.identities.length === 0)
+            || (data.user && !data.session);
 
-    // Update profile with location (trigger creates the row, we update it)
-    if (data.user && data.session) {
-        // Only update if we have a session (email confirmed or confirmation disabled)
-        await new Promise(r => setTimeout(r, 500));
-        await supabaseClient
-            .from('profiles')
-            .update({ location, display_name: displayName })
-            .eq('id', data.user.id);
-        await loadProfile(data.user.id);
+        // Update profile with location (trigger creates the row, we update it)
+        if (data.user && data.session) {
+            // Only update if we have a session (email confirmed or confirmation disabled)
+            await new Promise(r => setTimeout(r, 500));
+            const { error: profileErr } = await supabaseClient
+                .from('profiles')
+                .update({ location, display_name: displayName })
+                .eq('id', data.user.id);
+            if (profileErr) {
+                logError('auth.js:registerUser:profileUpdate', profileErr.message, { userId: data.user.id });
+            }
+            await loadProfile(data.user.id);
+        }
+
+        return { user: data.user, needsConfirmation };
+    } catch (err) {
+        logError('auth.js:registerUser', err.message, { email, stack: err.stack });
+        return { error: 'Registration failed. Please try again.' };
     }
-
-    return { user: data.user, needsConfirmation };
 }
 
 // ── Login ──────────────────────────────────────────────────────────
 
 async function loginUser(email, password) {
-    const { data, error } = await supabaseClient.auth.signInWithPassword({
-        email,
-        password
-    });
-    if (error) return { error: error.message };
-    if (data.user) {
-        await loadProfile(data.user.id);
+    try {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
+            email,
+            password
+        });
+        if (error) {
+            logError('auth.js:loginUser', error.message, { email }, 'warn');
+            return { error: error.message };
+        }
+        if (data.user) {
+            await loadProfile(data.user.id);
+        }
+        return { user: data.user };
+    } catch (err) {
+        logError('auth.js:loginUser', err.message, { email, stack: err.stack });
+        return { error: 'Login failed. Please try again.' };
     }
-    return { user: data.user };
 }
 
 // ── Logout ─────────────────────────────────────────────────────────
 
 async function logoutUser() {
-    await supabaseClient.auth.signOut();
+    try {
+        const { error } = await supabaseClient.auth.signOut();
+        if (error) logError('auth.js:logoutUser', error.message);
+    } catch (err) {
+        logError('auth.js:logoutUser', err.message, { stack: err.stack });
+    }
     currentUser = null;
 }
 
@@ -96,54 +162,84 @@ async function logoutUser() {
 async function redeemUnlockKey(code) {
     if (!currentUser) return { error: 'Not logged in' };
 
-    // Check if key exists and is unredeemed
-    const { data: key, error: findErr } = await supabaseClient
-        .from('unlock_keys')
-        .select('id, redeemed_by')
-        .eq('code', code.trim())
-        .single();
+    try {
+        // Check if key exists and is unredeemed
+        const { data: key, error: findErr } = await supabaseClient
+            .from('unlock_keys')
+            .select('id, redeemed_by')
+            .eq('code', code.trim())
+            .single();
 
-    if (findErr || !key) return { error: 'Invalid unlock code' };
-    if (key.redeemed_by) return { error: 'This code has already been used' };
+        if (findErr || !key) {
+            if (findErr) logError('auth.js:redeemUnlockKey:find', findErr.message, { code: code.trim() });
+            return { error: 'Invalid unlock code' };
+        }
+        if (key.redeemed_by) return { error: 'This code has already been used' };
 
-    // Redeem the key
-    const { error: redeemErr } = await supabaseClient
-        .from('unlock_keys')
-        .update({ redeemed_by: currentUser.id, redeemed_at: new Date().toISOString() })
-        .eq('id', key.id);
+        // Redeem the key
+        const { error: redeemErr } = await supabaseClient
+            .from('unlock_keys')
+            .update({ redeemed_by: currentUser.id, redeemed_at: new Date().toISOString() })
+            .eq('id', key.id);
 
-    if (redeemErr) return { error: 'Failed to redeem code. Please try again.' };
+        if (redeemErr) {
+            logError('auth.js:redeemUnlockKey:redeem', redeemErr.message, { keyId: key.id });
+            return { error: 'Failed to redeem code. Please try again.' };
+        }
 
-    // Mark user as unlocked
-    const { error: unlockErr } = await supabaseClient
-        .from('profiles')
-        .update({ is_unlocked: true })
-        .eq('id', currentUser.id);
+        // Mark user as unlocked
+        const { error: unlockErr } = await supabaseClient
+            .from('profiles')
+            .update({ is_unlocked: true })
+            .eq('id', currentUser.id);
 
-    if (unlockErr) return { error: 'Code redeemed but failed to unlock account. Contact support.' };
+        if (unlockErr) {
+            logError('auth.js:redeemUnlockKey:unlock', unlockErr.message, { userId: currentUser.id });
+            return { error: 'Code redeemed but failed to unlock account. Contact support.' };
+        }
 
-    currentUser.is_unlocked = true;
-    return { success: true };
+        currentUser.is_unlocked = true;
+        return { success: true };
+    } catch (err) {
+        logError('auth.js:redeemUnlockKey', err.message, { stack: err.stack });
+        return { error: 'An unexpected error occurred. Please try again.' };
+    }
 }
 
 // ── Preferences ────────────────────────────────────────────────────
 
 async function loadPreferences() {
     if (!currentUser) return null;
-    const { data } = await supabaseClient
-        .from('user_preferences')
-        .select('default_player_count, player_names, hard_mode, active_question_set')
-        .eq('user_id', currentUser.id)
-        .single();
-    return data;
+    try {
+        const { data, error } = await supabaseClient
+            .from('user_preferences')
+            .select('default_player_count, player_names, hard_mode, active_question_set')
+            .eq('user_id', currentUser.id)
+            .single();
+        if (error) {
+            logError('auth.js:loadPreferences', error.message, { userId: currentUser.id });
+            return null;
+        }
+        return data;
+    } catch (err) {
+        logError('auth.js:loadPreferences', err.message, { stack: err.stack });
+        return null;
+    }
 }
 
 async function savePreferences(prefs) {
     if (!currentUser) return;
-    await supabaseClient
-        .from('user_preferences')
-        .update({ ...prefs, updated_at: new Date().toISOString() })
-        .eq('user_id', currentUser.id);
+    try {
+        const { error } = await supabaseClient
+            .from('user_preferences')
+            .update({ ...prefs, updated_at: new Date().toISOString() })
+            .eq('user_id', currentUser.id);
+        if (error) {
+            logError('auth.js:savePreferences', error.message, { userId: currentUser.id });
+        }
+    } catch (err) {
+        logError('auth.js:savePreferences', err.message, { stack: err.stack });
+    }
 }
 
 // ── Custom Question Sets ──────────────────────────────────────────
@@ -159,212 +255,307 @@ function generateRandomCode(length = 8) {
 
 async function loadQuestionSets() {
     if (!currentUser) return { data: [], error: 'Not logged in' };
-    const { data, error } = await supabaseClient
-        .from('question_sets')
-        .select('id, name, share_code, question_count, created_at')
-        .eq('owner_id', currentUser.id)
-        .order('created_at', { ascending: false });
-    return { data: data || [], error: error ? error.message : null };
+    try {
+        const { data, error } = await supabaseClient
+            .from('question_sets')
+            .select('id, name, share_code, question_count, created_at')
+            .eq('owner_id', currentUser.id)
+            .order('created_at', { ascending: false });
+        if (error) logError('auth.js:loadQuestionSets', error.message);
+        return { data: data || [], error: error ? error.message : null };
+    } catch (err) {
+        logError('auth.js:loadQuestionSets', err.message, { stack: err.stack });
+        return { data: [], error: 'Failed to load question sets' };
+    }
 }
 
 async function createQuestionSet(name) {
     if (!currentUser) return { error: 'Not logged in' };
-    const { data, error } = await supabaseClient
-        .from('question_sets')
-        .insert({ owner_id: currentUser.id, name })
-        .select()
-        .single();
-    return { data, error: error ? error.message : null };
+    try {
+        const { data, error } = await supabaseClient
+            .from('question_sets')
+            .insert({ owner_id: currentUser.id, name })
+            .select()
+            .single();
+        if (error) logError('auth.js:createQuestionSet', error.message, { name });
+        return { data, error: error ? error.message : null };
+    } catch (err) {
+        logError('auth.js:createQuestionSet', err.message, { name, stack: err.stack });
+        return { error: 'Failed to create question set' };
+    }
 }
 
 async function deleteQuestionSet(setId) {
     if (!currentUser) return { error: 'Not logged in' };
-    // Clear active_question_set if it points to the deleted set
-    const sel = document.getElementById('question-set-select');
-    if (sel && sel.value === setId) {
-        await setActiveQuestionSet(null);
+    try {
+        // Clear active_question_set if it points to the deleted set
+        const sel = document.getElementById('question-set-select');
+        if (sel && sel.value === setId) {
+            await setActiveQuestionSet(null);
+        }
+        const { error } = await supabaseClient
+            .from('question_sets')
+            .delete()
+            .eq('id', setId)
+            .eq('owner_id', currentUser.id);
+        if (error) logError('auth.js:deleteQuestionSet', error.message, { setId });
+        return { error: error ? error.message : null };
+    } catch (err) {
+        logError('auth.js:deleteQuestionSet', err.message, { setId, stack: err.stack });
+        return { error: 'Failed to delete question set' };
     }
-    const { error } = await supabaseClient
-        .from('question_sets')
-        .delete()
-        .eq('id', setId)
-        .eq('owner_id', currentUser.id);
-    return { error: error ? error.message : null };
 }
 
 async function renameQuestionSet(setId, newName) {
     if (!currentUser) return { error: 'Not logged in' };
-    const { error } = await supabaseClient
-        .from('question_sets')
-        .update({ name: newName, updated_at: new Date().toISOString() })
-        .eq('id', setId)
-        .eq('owner_id', currentUser.id);
-    return { error: error ? error.message : null };
+    try {
+        const { error } = await supabaseClient
+            .from('question_sets')
+            .update({ name: newName, updated_at: new Date().toISOString() })
+            .eq('id', setId)
+            .eq('owner_id', currentUser.id);
+        if (error) logError('auth.js:renameQuestionSet', error.message, { setId, newName });
+        return { error: error ? error.message : null };
+    } catch (err) {
+        logError('auth.js:renameQuestionSet', err.message, { setId, stack: err.stack });
+        return { error: 'Failed to rename question set' };
+    }
 }
 
 async function loadQuestionSetItems(setId) {
-    const { data, error } = await supabaseClient
-        .from('question_set_items')
-        .select('id, question, answer, sort_order')
-        .eq('set_id', setId)
-        .order('sort_order', { ascending: true });
-    return { data: data || [], error: error ? error.message : null };
+    try {
+        const { data, error } = await supabaseClient
+            .from('question_set_items')
+            .select('id, question, answer, sort_order')
+            .eq('set_id', setId)
+            .order('sort_order', { ascending: true });
+        if (error) logError('auth.js:loadQuestionSetItems', error.message, { setId });
+        return { data: data || [], error: error ? error.message : null };
+    } catch (err) {
+        logError('auth.js:loadQuestionSetItems', err.message, { setId, stack: err.stack });
+        return { data: [], error: 'Failed to load questions' };
+    }
 }
 
 async function addQuestionToSet(setId, questionText, answer) {
     if (!currentUser) return { error: 'Not logged in' };
-    // Get current max sort_order
-    const { data: existing } = await supabaseClient
-        .from('question_set_items')
-        .select('sort_order')
-        .eq('set_id', setId)
-        .order('sort_order', { ascending: false })
-        .limit(1);
-    const nextOrder = (existing && existing.length > 0) ? existing[0].sort_order + 1 : 0;
-
-    const { data, error } = await supabaseClient
-        .from('question_set_items')
-        .insert({ set_id: setId, question: questionText, answer, sort_order: nextOrder })
-        .select()
-        .single();
-
-    if (!error) {
-        // Update question count on the set
-        await supabaseClient.rpc('', {}).catch(() => {}); // no-op, update count manually
-        const { data: countData } = await supabaseClient
+    try {
+        // Get current max sort_order
+        const { data: existing, error: sortErr } = await supabaseClient
             .from('question_set_items')
-            .select('id', { count: 'exact', head: true })
-            .eq('set_id', setId);
-        // Use the count from the response headers if available
-        await supabaseClient
-            .from('question_sets')
-            .update({ question_count: nextOrder + 1, updated_at: new Date().toISOString() })
-            .eq('id', setId);
-    }
+            .select('sort_order')
+            .eq('set_id', setId)
+            .order('sort_order', { ascending: false })
+            .limit(1);
+        if (sortErr) logError('auth.js:addQuestionToSet:sortOrder', sortErr.message, { setId });
+        const nextOrder = (existing && existing.length > 0) ? existing[0].sort_order + 1 : 0;
 
-    return { data, error: error ? error.message : null };
+        const { data, error } = await supabaseClient
+            .from('question_set_items')
+            .insert({ set_id: setId, question: questionText, answer, sort_order: nextOrder })
+            .select()
+            .single();
+
+        if (!error) {
+            // Update question count on the set
+            const { error: countErr } = await supabaseClient
+                .from('question_sets')
+                .update({ question_count: nextOrder + 1, updated_at: new Date().toISOString() })
+                .eq('id', setId);
+            if (countErr) logError('auth.js:addQuestionToSet:countUpdate', countErr.message, { setId });
+        } else {
+            logError('auth.js:addQuestionToSet', error.message, { setId });
+        }
+
+        return { data, error: error ? error.message : null };
+    } catch (err) {
+        logError('auth.js:addQuestionToSet', err.message, { setId, stack: err.stack });
+        return { error: 'Failed to add question' };
+    }
 }
 
 async function updateQuestionInSet(itemId, questionText, answer) {
     if (!currentUser) return { error: 'Not logged in' };
-    const { error } = await supabaseClient
-        .from('question_set_items')
-        .update({ question: questionText, answer })
-        .eq('id', itemId);
-    return { error: error ? error.message : null };
+    try {
+        const { error } = await supabaseClient
+            .from('question_set_items')
+            .update({ question: questionText, answer })
+            .eq('id', itemId);
+        if (error) logError('auth.js:updateQuestionInSet', error.message, { itemId });
+        return { error: error ? error.message : null };
+    } catch (err) {
+        logError('auth.js:updateQuestionInSet', err.message, { itemId, stack: err.stack });
+        return { error: 'Failed to update question' };
+    }
 }
 
 async function deleteQuestionFromSet(itemId, setId) {
     if (!currentUser) return { error: 'Not logged in' };
-    const { error } = await supabaseClient
-        .from('question_set_items')
-        .delete()
-        .eq('id', itemId);
-
-    if (!error && setId) {
-        // Update question count
-        const { data: items } = await supabaseClient
+    try {
+        const { error } = await supabaseClient
             .from('question_set_items')
-            .select('id')
-            .eq('set_id', setId);
-        await supabaseClient
-            .from('question_sets')
-            .update({ question_count: items ? items.length : 0, updated_at: new Date().toISOString() })
-            .eq('id', setId);
-    }
+            .delete()
+            .eq('id', itemId);
 
-    return { error: error ? error.message : null };
+        if (error) {
+            logError('auth.js:deleteQuestionFromSet', error.message, { itemId, setId });
+        } else if (setId) {
+            // Update question count
+            const { data: items, error: countErr } = await supabaseClient
+                .from('question_set_items')
+                .select('id')
+                .eq('set_id', setId);
+            if (countErr) {
+                logError('auth.js:deleteQuestionFromSet:count', countErr.message, { setId });
+            }
+            const { error: updateErr } = await supabaseClient
+                .from('question_sets')
+                .update({ question_count: items ? items.length : 0, updated_at: new Date().toISOString() })
+                .eq('id', setId);
+            if (updateErr) {
+                logError('auth.js:deleteQuestionFromSet:updateCount', updateErr.message, { setId });
+            }
+        }
+
+        return { error: error ? error.message : null };
+    } catch (err) {
+        logError('auth.js:deleteQuestionFromSet', err.message, { itemId, setId, stack: err.stack });
+        return { error: 'Failed to delete question' };
+    }
 }
 
 async function generateShareCode(setId) {
     if (!currentUser) return { error: 'Not logged in' };
-    const code = generateRandomCode(8);
-    const { error } = await supabaseClient
-        .from('question_sets')
-        .update({ share_code: code })
-        .eq('id', setId)
-        .eq('owner_id', currentUser.id);
-    if (error) {
-        // Retry once in case of unique constraint collision
-        const code2 = generateRandomCode(8);
-        const { error: err2 } = await supabaseClient
+    try {
+        const code = generateRandomCode(8);
+        const { error } = await supabaseClient
             .from('question_sets')
-            .update({ share_code: code2 })
+            .update({ share_code: code })
             .eq('id', setId)
             .eq('owner_id', currentUser.id);
-        if (err2) return { error: err2.message };
-        return { code: code2 };
+        if (error) {
+            logError('auth.js:generateShareCode:firstAttempt', error.message, { setId }, 'warn');
+            // Retry once in case of unique constraint collision
+            const code2 = generateRandomCode(8);
+            const { error: err2 } = await supabaseClient
+                .from('question_sets')
+                .update({ share_code: code2 })
+                .eq('id', setId)
+                .eq('owner_id', currentUser.id);
+            if (err2) {
+                logError('auth.js:generateShareCode:retry', err2.message, { setId });
+                return { error: err2.message };
+            }
+            return { code: code2 };
+        }
+        return { code };
+    } catch (err) {
+        logError('auth.js:generateShareCode', err.message, { setId, stack: err.stack });
+        return { error: 'Failed to generate share code' };
     }
-    return { code };
 }
 
 async function revokeShareCode(setId) {
     if (!currentUser) return { error: 'Not logged in' };
-    const { error } = await supabaseClient
-        .from('question_sets')
-        .update({ share_code: null })
-        .eq('id', setId)
-        .eq('owner_id', currentUser.id);
-    return { error: error ? error.message : null };
+    try {
+        const { error } = await supabaseClient
+            .from('question_sets')
+            .update({ share_code: null })
+            .eq('id', setId)
+            .eq('owner_id', currentUser.id);
+        if (error) logError('auth.js:revokeShareCode', error.message, { setId });
+        return { error: error ? error.message : null };
+    } catch (err) {
+        logError('auth.js:revokeShareCode', err.message, { setId, stack: err.stack });
+        return { error: 'Failed to revoke share code' };
+    }
 }
 
 async function importQuestionSet(shareCode) {
     if (!currentUser) return { error: 'Not logged in' };
 
-    // Find the shared set
-    const { data: sets, error: findErr } = await supabaseClient
-        .from('question_sets')
-        .select('id, name, question_count')
-        .eq('share_code', shareCode.trim().toUpperCase())
-        .limit(1);
+    try {
+        // Find the shared set
+        const { data: sets, error: findErr } = await supabaseClient
+            .from('question_sets')
+            .select('id, name, question_count')
+            .eq('share_code', shareCode.trim().toUpperCase())
+            .limit(1);
 
-    if (findErr || !sets || sets.length === 0) return { error: 'No question set found with that code' };
-    const sourceSet = sets[0];
+        if (findErr) {
+            logError('auth.js:importQuestionSet:find', findErr.message, { shareCode });
+            return { error: 'No question set found with that code' };
+        }
+        if (!sets || sets.length === 0) return { error: 'No question set found with that code' };
+        const sourceSet = sets[0];
 
-    // Load all questions from the shared set
-    const { data: items, error: itemsErr } = await supabaseClient
-        .from('question_set_items')
-        .select('question, answer, sort_order')
-        .eq('set_id', sourceSet.id)
-        .order('sort_order', { ascending: true });
+        // Load all questions from the shared set
+        const { data: items, error: itemsErr } = await supabaseClient
+            .from('question_set_items')
+            .select('question, answer, sort_order')
+            .eq('set_id', sourceSet.id)
+            .order('sort_order', { ascending: true });
 
-    if (itemsErr) return { error: 'Failed to load questions from shared set' };
-    if (!items || items.length === 0) return { error: 'The shared set has no questions' };
+        if (itemsErr) {
+            logError('auth.js:importQuestionSet:loadItems', itemsErr.message, { sourceSetId: sourceSet.id });
+            return { error: 'Failed to load questions from shared set' };
+        }
+        if (!items || items.length === 0) return { error: 'The shared set has no questions' };
 
-    // Create a new set owned by the current user
-    const importName = `Imported: ${sourceSet.name}`.substring(0, 60);
-    const { data: newSet, error: createErr } = await supabaseClient
-        .from('question_sets')
-        .insert({ owner_id: currentUser.id, name: importName, question_count: items.length })
-        .select()
-        .single();
+        // Create a new set owned by the current user
+        const importName = `Imported: ${sourceSet.name}`.substring(0, 60);
+        const { data: newSet, error: createErr } = await supabaseClient
+            .from('question_sets')
+            .insert({ owner_id: currentUser.id, name: importName, question_count: items.length })
+            .select()
+            .single();
 
-    if (createErr || !newSet) return { error: 'Failed to create imported set' };
+        if (createErr || !newSet) {
+            logError('auth.js:importQuestionSet:create', createErr?.message || 'No set returned', { importName });
+            return { error: 'Failed to create imported set' };
+        }
 
-    // Bulk insert all questions
-    const newItems = items.map(item => ({
-        set_id: newSet.id,
-        question: item.question,
-        answer: item.answer,
-        sort_order: item.sort_order
-    }));
-    const { error: insertErr } = await supabaseClient
-        .from('question_set_items')
-        .insert(newItems);
+        // Bulk insert all questions
+        const newItems = items.map(item => ({
+            set_id: newSet.id,
+            question: item.question,
+            answer: item.answer,
+            sort_order: item.sort_order
+        }));
+        const { error: insertErr } = await supabaseClient
+            .from('question_set_items')
+            .insert(newItems);
 
-    if (insertErr) return { error: 'Set created but failed to copy some questions' };
+        if (insertErr) {
+            logError('auth.js:importQuestionSet:bulkInsert', insertErr.message, { newSetId: newSet.id });
+            return { error: 'Set created but failed to copy some questions' };
+        }
 
-    return { data: { newSetId: newSet.id, name: importName, questionCount: items.length } };
+        return { data: { newSetId: newSet.id, name: importName, questionCount: items.length } };
+    } catch (err) {
+        logError('auth.js:importQuestionSet', err.message, { shareCode, stack: err.stack });
+        return { error: 'Failed to import question set' };
+    }
 }
 
 async function setActiveQuestionSet(setId) {
     if (!currentUser) return { error: 'Not logged in' };
-    const { error } = await supabaseClient
-        .from('user_preferences')
-        .update({ active_question_set: setId, updated_at: new Date().toISOString() })
-        .eq('user_id', currentUser.id);
-    window._activeQuestionSet = setId || null;
-    return { error: error ? error.message : null };
+    try {
+        const { error } = await supabaseClient
+            .from('user_preferences')
+            .update({ active_question_set: setId, updated_at: new Date().toISOString() })
+            .eq('user_id', currentUser.id);
+        if (error) {
+            logError('auth.js:setActiveQuestionSet', error.message, { setId });
+            return { error: error.message };
+        }
+        // Only update local state after successful DB update
+        window._activeQuestionSet = setId || null;
+        return { error: null };
+    } catch (err) {
+        logError('auth.js:setActiveQuestionSet', err.message, { setId, stack: err.stack });
+        return { error: 'Failed to set active question set' };
+    }
 }
 
 // ── Custom Questions UI ──────────────────────────────────────────
@@ -380,7 +571,11 @@ async function showQuestionSetList() {
     const screen = document.getElementById('questions-screen');
     if (!screen) return;
 
-    const { data: sets } = await loadQuestionSets();
+    const { data: sets, error: setsErr } = await loadQuestionSets();
+    if (setsErr) {
+        logError('auth.js:showQuestionSetList', setsErr);
+        showQsetMessage('Failed to load question sets. Please try again.', 'error');
+    }
 
     let setsHtml = '';
     if (sets.length === 0) {
@@ -529,20 +724,22 @@ async function renderSetEditor(setId) {
     if (!screen) return;
 
     // Load set info and items
-    const { data: sets } = await supabaseClient
+    const { data: sets, error: setErr } = await supabaseClient
         .from('question_sets')
         .select('id, name, share_code, question_count')
         .eq('id', setId)
         .single();
 
-    if (!sets) {
+    if (setErr || !sets) {
+        if (setErr) logError('auth.js:renderSetEditor', setErr.message, { setId });
         showQsetMessage('Question set not found', 'error');
         await showQuestionSetList();
         return;
     }
 
     const setInfo = sets;
-    const { data: items } = await loadQuestionSetItems(setId);
+    const { data: items, error: itemsErr } = await loadQuestionSetItems(setId);
+    if (itemsErr) logError('auth.js:renderSetEditor:items', itemsErr, { setId });
 
     let itemsHtml = '';
     if (items.length === 0) {
@@ -745,7 +942,8 @@ async function populateQuestionSetSelector() {
     }
     row.style.display = '';
 
-    const { data: sets } = await loadQuestionSets();
+    const { data: sets, error: setsErr } = await loadQuestionSets();
+    if (setsErr) logError('auth.js:populateQuestionSetSelector', setsErr);
     const currentActive = window._activeQuestionSet || '';
 
     // Preserve built-in option, rebuild the rest
@@ -1104,12 +1302,20 @@ async function resendConfirmationEmail() {
     const email = currentUser.email;
     if (!email) return { error: 'No email address on file' };
 
-    const { error } = await supabaseClient.auth.resend({
-        type: 'signup',
-        email
-    });
-    if (error) return { error: error.message };
-    return { success: true };
+    try {
+        const { error } = await supabaseClient.auth.resend({
+            type: 'signup',
+            email
+        });
+        if (error) {
+            logError('auth.js:resendConfirmationEmail', error.message, { email });
+            return { error: error.message };
+        }
+        return { success: true };
+    } catch (err) {
+        logError('auth.js:resendConfirmationEmail', err.message, { email, stack: err.stack });
+        return { error: 'Failed to resend email. Please try again.' };
+    }
 }
 
 // ── Account Settings Screen ──────────────────────────────────────
@@ -1182,22 +1388,28 @@ function renderAccountScreenContent() {
     const resendBtn = document.getElementById('account-resend-btn');
     if (resendBtn) {
         resendBtn.addEventListener('click', async () => {
-            resendBtn.disabled = true;
-            resendBtn.textContent = 'Sending...';
-            const errEl = document.getElementById('account-resend-error');
-            const successEl = document.getElementById('account-resend-success');
-            errEl.classList.add('hidden');
-            successEl.classList.add('hidden');
+            try {
+                resendBtn.disabled = true;
+                resendBtn.textContent = 'Sending...';
+                const errEl = document.getElementById('account-resend-error');
+                const successEl = document.getElementById('account-resend-success');
+                errEl.classList.add('hidden');
+                successEl.classList.add('hidden');
 
-            const result = await resendConfirmationEmail();
-            if (result.error) {
-                errEl.textContent = result.error;
-                errEl.classList.remove('hidden');
-                resendBtn.disabled = false;
-                resendBtn.textContent = 'Resend Confirmation Email';
-            } else {
-                successEl.textContent = 'Confirmation email sent! Check your inbox.';
-                successEl.classList.remove('hidden');
+                const result = await resendConfirmationEmail();
+                if (result.error) {
+                    errEl.textContent = result.error;
+                    errEl.classList.remove('hidden');
+                    resendBtn.disabled = false;
+                    resendBtn.textContent = 'Resend Confirmation Email';
+                } else {
+                    successEl.textContent = 'Confirmation email sent! Check your inbox.';
+                    successEl.classList.remove('hidden');
+                    resendBtn.disabled = false;
+                    resendBtn.textContent = 'Resend Confirmation Email';
+                }
+            } catch (err) {
+                logError('auth.js:resendBtn:click', err.message, { stack: err.stack });
                 resendBtn.disabled = false;
                 resendBtn.textContent = 'Resend Confirmation Email';
             }
@@ -1210,34 +1422,40 @@ function renderAccountScreenContent() {
         unlockForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const btn = unlockForm.querySelector('button');
-            btn.disabled = true;
-            btn.textContent = 'Validating...';
-            const errEl = document.getElementById('account-unlock-error');
-            const successEl = document.getElementById('account-unlock-success');
-            errEl.classList.add('hidden');
-            successEl.classList.add('hidden');
+            try {
+                btn.disabled = true;
+                btn.textContent = 'Validating...';
+                const errEl = document.getElementById('account-unlock-error');
+                const successEl = document.getElementById('account-unlock-success');
+                errEl.classList.add('hidden');
+                successEl.classList.add('hidden');
 
-            const code = document.getElementById('account-unlock-code').value.trim();
-            const result = await redeemUnlockKey(code);
+                const code = document.getElementById('account-unlock-code').value.trim();
+                const result = await redeemUnlockKey(code);
 
-            if (result.error) {
-                errEl.textContent = result.error;
-                errEl.classList.remove('hidden');
+                if (result.error) {
+                    errEl.textContent = result.error;
+                    errEl.classList.remove('hidden');
+                    btn.disabled = false;
+                    btn.textContent = 'Unlock';
+                } else {
+                    successEl.textContent = 'Unlocked! You now have full access to all questions.';
+                    successEl.classList.remove('hidden');
+                    btn.disabled = false;
+                    btn.textContent = 'Unlock';
+                    // Refresh the badge to show unlocked status
+                    renderUserBadge();
+                    // Re-render the content to hide the unlock section
+                    setTimeout(() => {
+                        renderAccountScreenContent();
+                        // Also refresh the question set selector on config screen
+                        populateQuestionSetSelector();
+                    }, 1500);
+                }
+            } catch (err) {
+                logError('auth.js:unlockForm:submit', err.message, { stack: err.stack });
                 btn.disabled = false;
                 btn.textContent = 'Unlock';
-            } else {
-                successEl.textContent = 'Unlocked! You now have full access to all questions.';
-                successEl.classList.remove('hidden');
-                btn.disabled = false;
-                btn.textContent = 'Unlock';
-                // Refresh the badge to show unlocked status
-                renderUserBadge();
-                // Re-render the content to hide the unlock section
-                setTimeout(() => {
-                    renderAccountScreenContent();
-                    // Also refresh the question set selector on config screen
-                    populateQuestionSetSelector();
-                }, 1500);
             }
         });
     }
@@ -1261,13 +1479,17 @@ function showScreen(id) {
 }
 
 async function onAuthSuccess() {
-    // Load user preferences into config form
-    const prefs = await loadPreferences();
-    if (prefs) {
-        applyPreferencesToConfig(prefs);
+    try {
+        // Load user preferences into config form
+        const prefs = await loadPreferences();
+        if (prefs) {
+            applyPreferencesToConfig(prefs);
+        }
+        // Populate the question set dropdown for unlocked users
+        await populateQuestionSetSelector();
+    } catch (err) {
+        logError('auth.js:onAuthSuccess', err.message, { stack: err.stack });
     }
-    // Populate the question set dropdown for unlocked users
-    await populateQuestionSetSelector();
     showScreen('config-screen');
     renderUserBadge();
 }
@@ -1327,9 +1549,13 @@ function renderUserBadge() {
         const logoutBtn = document.getElementById('logout-btn');
         if (logoutBtn) {
             logoutBtn.addEventListener('click', async () => {
-                await logoutUser();
-                showScreen('landing-screen');
-                badge.classList.add('hidden');
+                try {
+                    await logoutUser();
+                    showScreen('landing-screen');
+                    badge.classList.add('hidden');
+                } catch (err) {
+                    logError('auth.js:logoutBtn:click', err.message, { stack: err.stack });
+                }
             });
         }
     } else {
@@ -1340,23 +1566,29 @@ function renderUserBadge() {
 // ── Boot ────────────────────────────────────────────────────────────
 
 async function bootAuth() {
-    if (!initSupabase() || !supabaseClient) {
-        // SDK failed to load — let the game run without auth
+    try {
+        if (!initSupabase() || !supabaseClient) {
+            // SDK failed to load — let the game run without auth
+            showScreen('config-screen');
+            return;
+        }
+
+        renderLandingScreen();
+        renderAuthScreen();
+        renderUnlockScreen();
+        renderQuestionsScreen();
+        renderAccountScreen();
+
+        // Check for existing session
+        const user = await checkSession();
+        if (user) {
+            await onAuthSuccess();
+        } else {
+            showScreen('landing-screen');
+        }
+    } catch (err) {
+        logError('auth.js:bootAuth', err.message, { stack: err.stack }, 'critical');
+        // Fallback: show config screen even if boot fails
         showScreen('config-screen');
-        return;
-    }
-
-    renderLandingScreen();
-    renderAuthScreen();
-    renderUnlockScreen();
-    renderQuestionsScreen();
-    renderAccountScreen();
-
-    // Check for existing session
-    const user = await checkSession();
-    if (user) {
-        await onAuthSuccess();
-    } else {
-        showScreen('landing-screen');
     }
 }

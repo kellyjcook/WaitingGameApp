@@ -234,3 +234,32 @@ CREATE POLICY "Users can read shared set items"
           AND question_sets.share_code IS NOT NULL
           AND auth.uid() IS NOT NULL
     ));
+
+-- =====================================================
+-- 5. Error Logs (client-side error tracking)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS error_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+    error_source VARCHAR(120) NOT NULL,
+    error_message TEXT NOT NULL,
+    error_context JSONB DEFAULT '{}'::jsonb,
+    severity VARCHAR(10) DEFAULT 'error',
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_error_logs_created ON error_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_error_logs_severity ON error_logs(severity);
+
+-- RLS for error_logs
+ALTER TABLE error_logs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone can insert error logs" ON error_logs;
+
+-- Allow any connection (authenticated or anon) to insert error logs
+CREATE POLICY "Anyone can insert error logs"
+    ON error_logs FOR INSERT
+    WITH CHECK (true);
+
+-- No SELECT/UPDATE/DELETE policies — admin reviews via Supabase dashboard

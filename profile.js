@@ -9,32 +9,36 @@ let _saveDebounce = null;
 function savePreferencesToCloud() {
     if (_saveDebounce) clearTimeout(_saveDebounce);
     _saveDebounce = setTimeout(async () => {
-        const countSel = document.getElementById('player-count');
-        const hardMode = document.getElementById('hard-mode');
-        const count = countSel ? parseInt(countSel.value, 10) : 2;
-        const names = [];
-        for (let i = 1; i <= 8; i++) {
-            const inp = document.getElementById(`player-name-${i}`);
-            names.push(inp ? inp.value : '');
-        }
-        const hard = hardMode ? hardMode.checked : false;
-
-        if (typeof savePreferences === 'function' && currentUser) {
-            const prefsToSave = {
-                default_player_count: count,
-                player_names: names,
-                hard_mode: hard
-            };
-            // Include active question set if available
-            const qsetSel = document.getElementById('question-set-select');
-            if (qsetSel) {
-                prefsToSave.active_question_set = qsetSel.value || null;
+        try {
+            const countSel = document.getElementById('player-count');
+            const hardMode = document.getElementById('hard-mode');
+            const count = countSel ? parseInt(countSel.value, 10) : 2;
+            const names = [];
+            for (let i = 1; i <= 8; i++) {
+                const inp = document.getElementById(`player-name-${i}`);
+                names.push(inp ? inp.value : '');
             }
-            await savePreferences(prefsToSave);
-        }
-        // Always save to cookies too as local fallback
-        if (typeof savePlayerConfigToCookies === 'function') {
-            savePlayerConfigToCookies();
+            const hard = hardMode ? hardMode.checked : false;
+
+            if (typeof savePreferences === 'function' && currentUser) {
+                const prefsToSave = {
+                    default_player_count: count,
+                    player_names: names,
+                    hard_mode: hard
+                };
+                // Include active question set if available
+                const qsetSel = document.getElementById('question-set-select');
+                if (qsetSel) {
+                    prefsToSave.active_question_set = qsetSel.value || null;
+                }
+                await savePreferences(prefsToSave);
+            }
+            // Always save to cookies too as local fallback
+            if (typeof savePlayerConfigToCookies === 'function') {
+                savePlayerConfigToCookies();
+            }
+        } catch (err) {
+            if (typeof logError === 'function') logError('profile.js:savePreferencesToCloud', err.message, { stack: err.stack });
         }
     }, 600);
 }
@@ -42,7 +46,7 @@ function savePreferencesToCloud() {
 // Determine the question source based on unlock status, custom set, and hard mode
 function getQuestionSource() {
     const hardMode = document.getElementById('hard-mode');
-    const isHard = hardMode && hardMode.checked;
+    const isHard = hardMode?.checked || false;
 
     // If user is logged in and NOT unlocked, use guest questions
     if (currentUser && !currentUser.is_unlocked) {
@@ -65,7 +69,7 @@ function getQuestionFile() {
     if (source.type === 'file') return source.file;
     // Fallback for custom sets — caller should use getQuestionSource() instead
     const hardMode = document.getElementById('hard-mode');
-    const isHard = hardMode && hardMode.checked;
+    const isHard = hardMode?.checked || false;
     return isHard ? 'hard+questions.json' : 'questions.json';
 }
 
@@ -94,26 +98,34 @@ function initProfileHooks() {
     // Question set selector: save preference and toggle hard mode
     if (qsetSel) {
         qsetSel.addEventListener('change', () => {
-            window._activeQuestionSet = qsetSel.value || null;
-            // Disable Hard Mode when a custom set is selected
-            if (hardMode) {
-                hardMode.disabled = !!qsetSel.value;
-                hardMode.parentElement.style.opacity = qsetSel.value ? '0.5' : '1';
+            try {
+                window._activeQuestionSet = qsetSel.value || null;
+                // Disable Hard Mode when a custom set is selected
+                if (hardMode) {
+                    hardMode.disabled = !!qsetSel.value;
+                    hardMode.parentElement.style.opacity = qsetSel.value ? '0.5' : '1';
+                }
+                // Save active set to Supabase immediately
+                if (typeof setActiveQuestionSet === 'function' && currentUser) {
+                    setActiveQuestionSet(qsetSel.value || null);
+                }
+                savePreferencesToCloud();
+            } catch (err) {
+                if (typeof logError === 'function') logError('profile.js:qsetSel:change', err.message, { stack: err.stack });
             }
-            // Save active set to Supabase immediately
-            if (typeof setActiveQuestionSet === 'function' && currentUser) {
-                setActiveQuestionSet(qsetSel.value || null);
-            }
-            savePreferencesToCloud();
         });
     }
 
     // Manage button: navigate to the questions management screen
     if (manageBtn) {
         manageBtn.addEventListener('click', () => {
-            if (typeof showScreen === 'function' && typeof showQuestionSetList === 'function') {
-                showScreen('questions-screen');
-                showQuestionSetList();
+            try {
+                if (typeof showScreen === 'function' && typeof showQuestionSetList === 'function') {
+                    showScreen('questions-screen');
+                    showQuestionSetList();
+                }
+            } catch (err) {
+                if (typeof logError === 'function') logError('profile.js:manageBtn:click', err.message, { stack: err.stack });
             }
         });
     }

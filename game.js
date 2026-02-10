@@ -38,6 +38,21 @@ const hardModeCheckbox = document.getElementById('hard-mode');
 // Render \n as line breaks in result text
 resultText.classList.add('nl-preline');
 
+// ── Global Error Handlers ────────────────────────────────────────
+// Capture uncaught errors and unhandled promise rejections
+window.addEventListener('error', (e) => {
+    if (typeof logError === 'function') {
+        logError('window.onerror', e.message || 'Unknown error', {
+            filename: e.filename, lineno: e.lineno, colno: e.colno
+        }, 'critical');
+    }
+});
+window.addEventListener('unhandledrejection', (e) => {
+    if (typeof logError === 'function') {
+        logError('unhandledrejection', String(e.reason || 'Unknown rejection'), {}, 'critical');
+    }
+});
+
 // Cookie utilities
 function setCookie(name, value, days = 365) {
     const expires = new Date(Date.now() + days * 864e5).toUTCString();
@@ -114,8 +129,9 @@ async function loadVersionBadge() {
                 }
             }
         }
-    } catch (_) {
-        // ignore; badge will remain empty if not available (e.g., local dev)
+    } catch (err) {
+        // Badge will remain empty if not available (e.g., local dev)
+        if (typeof logError === 'function') logError('game.js:loadVersionBadge', err.message, {}, 'warn');
     }
 }
 
@@ -199,10 +215,16 @@ async function initGameFromConfig() {
         if (!questionsLoaded && source.type === 'file') {
             try {
                 const res = await fetch(source.file, { cache: 'no-store' });
-                const data = await res.json();
-                gameState.questions = Array.isArray(data) ? data : [];
-                questionsLoaded = true;
+                if (!res.ok) {
+                    if (typeof logError === 'function') logError('game.js:initGameFromConfig:fetchFile', `HTTP ${res.status} for ${source.file}`);
+                    gameState.questions = [];
+                } else {
+                    const data = await res.json();
+                    gameState.questions = Array.isArray(data) ? data : [];
+                    questionsLoaded = true;
+                }
             } catch (e) {
+                if (typeof logError === 'function') logError('game.js:initGameFromConfig:fetchFile', e.message, { file: source.file });
                 gameState.questions = [];
             }
         }
@@ -214,9 +236,15 @@ async function initGameFromConfig() {
             ((hardModeCheckbox && hardModeCheckbox.checked) ? 'hard+questions.json' : 'questions.json');
         try {
             const res = await fetch(questionsFile, { cache: 'no-store' });
-            const data = await res.json();
-            gameState.questions = Array.isArray(data) ? data : [];
+            if (!res.ok) {
+                if (typeof logError === 'function') logError('game.js:initGameFromConfig:fetchFallback', `HTTP ${res.status} for ${questionsFile}`);
+                gameState.questions = [];
+            } else {
+                const data = await res.json();
+                gameState.questions = Array.isArray(data) ? data : [];
+            }
         } catch (e) {
+            if (typeof logError === 'function') logError('game.js:initGameFromConfig:fetchFallback', e.message, { file: questionsFile });
             gameState.questions = [];
         }
     }
@@ -677,9 +705,16 @@ function endGame() {
 
 // Event Listeners
 startBtn.addEventListener('click', async () => {
-    configScreen.classList.add('hidden');
-    gameScreen.classList.remove('hidden');
-    await initGameFromConfig();
+    try {
+        configScreen.classList.add('hidden');
+        gameScreen.classList.remove('hidden');
+        await initGameFromConfig();
+    } catch (err) {
+        if (typeof logError === 'function') logError('game.js:startBtn:click', err.message, { stack: err.stack }, 'critical');
+        // Fallback: return to config screen
+        gameScreen.classList.add('hidden');
+        configScreen.classList.remove('hidden');
+    }
 });
 
 nextBtn.addEventListener('click', () => {

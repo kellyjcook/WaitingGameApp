@@ -64,7 +64,7 @@ async function loadProfile(userId) {
     try {
         const { data, error } = await supabaseClient
             .from('profiles')
-            .select('id, display_name, email, location, is_unlocked')
+            .select('id, display_name, email, location, is_unlocked, is_admin')
             .eq('id', userId)
             .single();
         if (error) {
@@ -745,8 +745,10 @@ async function renderSetEditor(setId) {
     if (items.length === 0) {
         itemsHtml = '<div class="qset-empty-state"><p>No questions yet. Add your first question below!</p></div>';
     } else {
+        const isAdmin = currentUser && currentUser.is_admin;
         itemsHtml = items.map((item, idx) => `
             <div class="question-item" data-item-id="${item.id}">
+                ${isAdmin ? `<input type="checkbox" class="qi-promote-checkbox" data-item-id="${item.id}" data-q="${escapeAttr(item.question)}" data-a="${item.answer}">` : ''}
                 <span class="question-item-num">${idx + 1}</span>
                 <span class="question-item-text">${escapeHtml(item.question)}</span>
                 <span class="question-item-answer">${item.answer}s</span>
@@ -802,6 +804,22 @@ async function renderSetEditor(setId) {
             <h3 style="margin-bottom:12px;color:#1a73e8;font-size:1rem">Sharing</h3>
             ${shareHtml}
         </div>
+
+        ${currentUser && currentUser.is_admin && items.length > 0 ? `
+        <div class="auth-card admin-section" style="max-width:600px;margin-top:20px">
+            <h3 style="margin-bottom:12px;color:#1a73e8;font-size:1rem">&#x1F6E0; Add to Game</h3>
+            <p style="font-size:0.85rem;color:#5f6368;margin:0 0 12px">Select questions above, then add them to the primary game question pool.</p>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <label style="font-weight:600;color:#202124;white-space:nowrap">Category:</label>
+                <select id="admin-promote-category" style="padding:8px 12px;border:2px solid #dadce0;border-radius:8px;font-size:0.9rem">
+                    <option value="standard">Standard</option>
+                    <option value="hard">Hard</option>
+                </select>
+                <button id="admin-promote-btn" class="account-action-btn" style="margin:0;flex:1" disabled>Add Selected to Game</button>
+            </div>
+            <div id="admin-promote-status" class="hidden" style="margin-top:10px"></div>
+        </div>
+        ` : ''}
 
         <div style="max-width:600px;width:100%;margin-top:16px;text-align:center">
             <button id="delete-set-btn" class="btn-danger">Delete This Set</button>
@@ -917,6 +935,41 @@ async function renderSetEditor(setId) {
         });
     }
 
+    // Admin promote controls
+    const promoteBtn = document.getElementById('admin-promote-btn');
+    if (promoteBtn) {
+        const checkboxes = screen.querySelectorAll('.qi-promote-checkbox');
+        const updatePromoteBtn = () => {
+            const checked = screen.querySelectorAll('.qi-promote-checkbox:checked').length;
+            promoteBtn.disabled = checked === 0;
+            promoteBtn.textContent = checked > 0 ? `Add ${checked} to Game` : 'Add Selected to Game';
+        };
+        checkboxes.forEach(cb => cb.addEventListener('change', updatePromoteBtn));
+
+        promoteBtn.addEventListener('click', async () => {
+            const selected = [];
+            screen.querySelectorAll('.qi-promote-checkbox:checked').forEach(cb => {
+                selected.push({ question: cb.dataset.q, answer: parseInt(cb.dataset.a, 10) });
+            });
+            if (selected.length === 0) return;
+            const category = document.getElementById('admin-promote-category').value;
+            promoteBtn.disabled = true;
+            promoteBtn.textContent = 'Adding...';
+            const statusEl = document.getElementById('admin-promote-status');
+            statusEl.className = 'hidden';
+            const result = await addQuestionsToGame(selected, category);
+            if (result.error) {
+                statusEl.className = 'auth-error';
+                statusEl.textContent = result.error;
+            } else {
+                statusEl.className = 'auth-success';
+                statusEl.textContent = `${selected.length} question${selected.length !== 1 ? 's' : ''} added to ${category} pool!`;
+                screen.querySelectorAll('.qi-promote-checkbox:checked').forEach(cb => { cb.checked = false; });
+            }
+            updatePromoteBtn();
+        });
+    }
+
     // Delete set
     document.getElementById('delete-set-btn').addEventListener('click', async () => {
         if (!confirm(`Delete "${setInfo.name}" and all its questions? This cannot be undone.`)) return;
@@ -981,6 +1034,69 @@ function escapeHtml(str) {
 
 function escapeAttr(str) {
     return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ── Game Questions (DB-backed primary question pool) ──────────────
+
+async function loadGameQuestions(category) {
+    if (!supabaseClient) return { data: [], error: 'Supabase not initialized' };
+    try {
+        const { data, error } = await supabaseClient
+            .from('game_questions')
+            .select('question, answer')
+            .eq('category', category);
+        if (error) {
+            logError('auth.js:loadGameQuestions', error.message, { category });
+            return { data: [], error: error.message };
+        }
+        return { data: data || [], error: null };
+    } catch (err) {
+        logError('auth.js:loadGameQuestions', err.message, { category, stack: err.stack });
+        return { data: [], error: 'Failed to load game questions' };
+    }
+}
+
+async function generateUnlockKey() {
+    if (!currentUser?.is_admin) return { error: 'Not authorized' };
+    try {
+        const code = generateRandomCode(8);
+        const { data, error } = await supabaseClient
+            .from('unlock_keys')
+            .insert({ code })
+            .select()
+            .single();
+        if (error) {
+            logError('auth.js:generateUnlockKey', error.message);
+            return { error: error.message };
+        }
+        return { data, error: null };
+    } catch (err) {
+        logError('auth.js:generateUnlockKey', err.message, { stack: err.stack });
+        return { error: 'Failed to generate unlock key' };
+    }
+}
+
+async function addQuestionsToGame(items, category) {
+    if (!currentUser?.is_admin) return { error: 'Not authorized' };
+    try {
+        const rows = items.map(item => ({
+            question: item.question,
+            answer: item.answer,
+            category,
+            added_by: currentUser.id
+        }));
+        const { error } = await supabaseClient
+            .from('game_questions')
+            .insert(rows);
+        if (error) {
+            logError('auth.js:addQuestionsToGame', error.message, { category, count: items.length });
+            return { error: error.message };
+        }
+        return { error: null, count: items.length };
+    } catch (err) {
+        logError('auth.js:addQuestionsToGame', err.message, { stack: err.stack });
+        return { error: 'Failed to add questions to game' };
+    }
 }
 
 // ── Landing Page ──────────────────────────────────────────────────
@@ -1382,6 +1498,16 @@ function renderAccountScreenContent() {
             <div id="account-resend-success" class="account-success hidden"></div>
             <button id="account-resend-btn" class="account-action-btn">Resend Confirmation Email</button>
         </div>
+
+        ${currentUser.is_admin ? `
+        <div class="account-section admin-section">
+            <h2>&#x1F6E0; Admin Tools</h2>
+            <p class="account-section-desc">Generate registration codes for new users.</p>
+            <div id="admin-generate-error" class="auth-error hidden"></div>
+            <div id="admin-generate-result" class="hidden"></div>
+            <button id="admin-generate-code-btn" class="account-action-btn">Generate Registration Code</button>
+        </div>
+        ` : ''}
     `;
 
     // Resend email handler
@@ -1456,6 +1582,51 @@ function renderAccountScreenContent() {
                 logError('auth.js:unlockForm:submit', err.message, { stack: err.stack });
                 btn.disabled = false;
                 btn.textContent = 'Unlock';
+            }
+        });
+    }
+
+    // Admin: generate registration code handler
+    const genCodeBtn = document.getElementById('admin-generate-code-btn');
+    if (genCodeBtn) {
+        genCodeBtn.addEventListener('click', async () => {
+            try {
+                genCodeBtn.disabled = true;
+                genCodeBtn.textContent = 'Generating...';
+                const errEl = document.getElementById('admin-generate-error');
+                const resultEl = document.getElementById('admin-generate-result');
+                errEl.classList.add('hidden');
+                resultEl.classList.add('hidden');
+
+                const result = await generateUnlockKey();
+                if (result.error) {
+                    errEl.textContent = result.error;
+                    errEl.classList.remove('hidden');
+                } else {
+                    const code = result.data.code;
+                    resultEl.innerHTML = `
+                        <div class="admin-code-display">
+                            <span class="admin-code-value">${escapeHtml(code)}</span>
+                            <button class="admin-copy-btn" title="Copy code">&#x1F4CB;</button>
+                        </div>
+                    `;
+                    resultEl.classList.remove('hidden');
+                    const copyBtn = resultEl.querySelector('.admin-copy-btn');
+                    if (copyBtn) {
+                        copyBtn.addEventListener('click', () => {
+                            navigator.clipboard.writeText(code).then(() => {
+                                copyBtn.textContent = '\u2713';
+                                setTimeout(() => { copyBtn.textContent = '\u{1F4CB}'; }, 1500);
+                            });
+                        });
+                    }
+                }
+                genCodeBtn.disabled = false;
+                genCodeBtn.textContent = 'Generate Registration Code';
+            } catch (err) {
+                logError('auth.js:genCodeBtn:click', err.message, { stack: err.stack });
+                genCodeBtn.disabled = false;
+                genCodeBtn.textContent = 'Generate Registration Code';
             }
         });
     }

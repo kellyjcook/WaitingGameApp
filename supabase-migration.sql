@@ -263,3 +263,47 @@ CREATE POLICY "Anyone can insert error logs"
     WITH CHECK (true);
 
 -- No SELECT/UPDATE/DELETE policies — admin reviews via Supabase dashboard
+
+-- =====================================================
+-- 6. Admin Flag + Game Questions (primary question pool)
+-- =====================================================
+
+-- Add is_admin flag to profiles
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false;
+
+-- Game questions table (replaces questions.json / hard+questions.json)
+CREATE TABLE IF NOT EXISTS game_questions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    question VARCHAR(500) NOT NULL,
+    answer INTEGER NOT NULL CHECK (answer >= 1 AND answer <= 30),
+    category VARCHAR(20) NOT NULL DEFAULT 'standard',
+    added_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_game_questions_category ON game_questions(category);
+
+ALTER TABLE game_questions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Authenticated users can read game questions"
+    ON game_questions FOR SELECT
+    USING (auth.uid() IS NOT NULL);
+
+CREATE POLICY "Admins can insert game questions"
+    ON game_questions FOR INSERT
+    WITH CHECK (
+        EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true)
+    );
+
+CREATE POLICY "Admins can delete game questions"
+    ON game_questions FOR DELETE
+    USING (
+        EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true)
+    );
+
+-- Allow admins to create unlock keys
+CREATE POLICY "Admins can create unlock keys"
+    ON unlock_keys FOR INSERT
+    WITH CHECK (
+        EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true)
+    );

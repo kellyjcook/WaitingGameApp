@@ -679,6 +679,15 @@ button:active {
     margin-bottom: 12px;
 }
 
+.auth-success {
+    background: #e6f4ea;
+    color: #137333;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    margin-bottom: 12px;
+}
+
 /* ── Email Confirmation Screen ───────────────────────── */
 
 .confirm-container {
@@ -1207,6 +1216,39 @@ button:active {
 
 .qi-delete-btn {
     font-size: 1rem;
+}
+
+.qi-promote-checkbox {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    cursor: pointer;
+    accent-color: #1a73e8;
+}
+
+.admin-section {
+    border-top: 2px solid #e8eaed;
+}
+
+.admin-code-display {
+    background: #e8f0fe;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-family: monospace;
+    font-size: 1.2rem;
+    letter-spacing: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 10px;
+}
+
+.admin-code-display button {
+    font-size: 0.8rem;
+    padding: 6px 12px;
+    margin: 0;
+    white-space: nowrap;
 }
 
 .set-editor-meta {

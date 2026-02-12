@@ -58,7 +58,12 @@ function getQuestionSource() {
         return { type: 'custom', setId: window._activeQuestionSet };
     }
 
-    // Unlocked or no auth — use full question set
+    // Unlocked user with Supabase — load from database
+    if (currentUser && currentUser.is_unlocked && typeof loadGameQuestions === 'function') {
+        return { type: 'db', category: isHard ? 'hard' : 'standard' };
+    }
+
+    // No auth or fallback — use local JSON files
     const file = isHard ? 'hard+questions.json' : 'questions.json';
     return { type: 'file', file };
 }

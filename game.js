@@ -212,6 +212,17 @@ async function initGameFromConfig() {
                 console.warn('Failed to load custom questions, falling back to built-in', e);
             }
         }
+        if (!questionsLoaded && source.type === 'db' && typeof loadGameQuestions === 'function') {
+            try {
+                const { data, error } = await loadGameQuestions(source.category);
+                if (!error && data && data.length > 0) {
+                    gameState.questions = data;
+                    questionsLoaded = true;
+                }
+            } catch (e) {
+                console.warn('Failed to load DB questions, falling back to file', e);
+            }
+        }
         if (!questionsLoaded && source.type === 'file') {
             try {
                 const res = await fetch(source.file, { cache: 'no-store' });

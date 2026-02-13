@@ -167,11 +167,11 @@ async function redeemUnlockKey(code) {
         const { data: key, error: findErr } = await supabaseClient
             .from('unlock_keys')
             .select('id, redeemed_by')
-            .eq('code', code.trim())
+            .eq('code', code.trim().toUpperCase())
             .single();
 
         if (findErr || !key) {
-            if (findErr) logError('auth.js:redeemUnlockKey:find', findErr.message, { code: code.trim() });
+            if (findErr) logError('auth.js:redeemUnlockKey:find', findErr.message, { code: code.trim().toUpperCase() });
             return { error: 'Invalid unlock code' };
         }
         if (key.redeemed_by) return { error: 'This code has already been used' };
@@ -1162,7 +1162,7 @@ function renderLandingScreen() {
                     </div>
                     <div class="info-card">
                         <h3>&#x1F511; Unlock Full Access</h3>
-                        <p>Enter your 8-digit unlock code to get unlimited access to hundreds of questions, including Hard Mode.</p>
+                        <p>Enter your unlock code to get unlimited access to hundreds of questions, including Hard Mode.</p>
                     </div>
                 </div>
             </div>
@@ -1374,13 +1374,13 @@ function renderUnlockScreen() {
             <h1>Trial Complete</h1>
             <div class="auth-card">
                 <p class="unlock-lead">You've played all 25 guest questions. Nice work!</p>
-                <p class="unlock-info">Enter your 8-digit unlock code to get unlimited access to all questions, including Hard Mode.</p>
+                <p class="unlock-info">Enter your unlock code to get unlimited access to all questions, including Hard Mode.</p>
                 <div id="unlock-error" class="auth-error hidden"></div>
                 <form id="unlock-form" class="auth-form">
-                    <input type="text" id="unlock-code" placeholder="8-digit unlock code"
-                           maxlength="8" pattern="[0-9]{8}" required
-                           inputmode="numeric" autocomplete="off"
-                           style="text-align:center; font-size:1.5rem; letter-spacing:4px">
+                    <input type="text" id="unlock-code" placeholder="Unlock code"
+                           maxlength="8" pattern="[A-Za-z0-9]{8}" required
+                           autocomplete="off"
+                           style="text-align:center; font-size:1.5rem; letter-spacing:4px; text-transform:uppercase">
                     <button type="submit">Unlock Full Game</button>
                 </form>
                 <p class="unlock-help">Don't have a code? Contact the person who shared The Waiting Game with you.</p>
@@ -1478,14 +1478,14 @@ function renderAccountScreenContent() {
         ${!isUnlocked ? `
         <div class="account-section">
             <h2>Enter Unlock Code</h2>
-            <p class="account-section-desc">Enter your 8-digit code to unlock unlimited questions and Hard Mode.</p>
+            <p class="account-section-desc">Enter your code to unlock unlimited questions and Hard Mode.</p>
             <div id="account-unlock-error" class="auth-error hidden"></div>
             <div id="account-unlock-success" class="account-success hidden"></div>
             <form id="account-unlock-form" class="account-inline-form">
-                <input type="text" id="account-unlock-code" placeholder="8-digit code"
-                       maxlength="8" pattern="[0-9]{8}" required
-                       inputmode="numeric" autocomplete="off"
-                       style="text-align:center; font-size:1.3rem; letter-spacing:3px">
+                <input type="text" id="account-unlock-code" placeholder="Unlock code"
+                       maxlength="8" pattern="[A-Za-z0-9]{8}" required
+                       autocomplete="off"
+                       style="text-align:center; font-size:1.3rem; letter-spacing:3px; text-transform:uppercase">
                 <button type="submit">Unlock</button>
             </form>
         </div>

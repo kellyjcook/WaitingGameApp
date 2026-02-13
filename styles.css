@@ -581,20 +581,26 @@ button:active {
     left: 0;
     top: 50%;
     transform: translateY(-50%);
-    background: none;
-    border: none;
+    background: #e8f0fe;
+    border: 2px solid #1a73e8;
     color: #1a73e8;
-    font-size: 1.8rem;
+    font-size: 1.2rem;
     cursor: pointer;
-    padding: 4px 12px;
+    width: 40px;
+    height: 40px;
+    padding: 0;
     margin: 0;
     line-height: 1;
-    border-radius: 8px;
-    transition: background 0.2s;
+    border-radius: 50%;
+    transition: background 0.2s, transform 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .back-btn:active {
-    background: rgba(26,115,232,0.1);
+    background: #c5dafa;
+    transform: translateY(-50%) scale(0.93);
 }
 
 .auth-header h1 {
@@ -1357,7 +1363,9 @@ button:active {
     }
 
     .back-btn {
-        font-size: 1.4rem;
+        width: 36px;
+        height: 36px;
+        font-size: 1rem;
     }
 
     .questions-header h1 {

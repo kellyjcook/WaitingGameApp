@@ -560,7 +560,8 @@ button:active {
 
 #auth-screen,
 #unlock-screen,
-#confirm-screen {
+#confirm-screen,
+#reset-screen {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -674,6 +675,31 @@ button:active {
 
 .auth-form button {
     margin: 4px 0 0;
+}
+
+.auth-link-row {
+    display: flex;
+    justify-content: center;
+    margin-top: 4px;
+}
+
+.auth-link {
+    background: none;
+    border: none;
+    color: #1a73e8;
+    font-size: 0.9rem;
+    padding: 6px 8px;
+    margin: 0;
+    width: auto;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+/* Beats the global button:active blue fill, which would otherwise
+   flash a solid box behind the link on tap. */
+.auth-form .auth-link:active {
+    background: none;
+    color: #174ea6;
 }
 
 .auth-error {

@@ -1216,6 +1216,9 @@ function renderAuthScreen() {
                 <input type="email" id="login-email" placeholder="Email" required autocomplete="email">
                 <input type="password" id="login-password" placeholder="Password" required autocomplete="current-password">
                 <button type="submit">Sign In</button>
+                <div class="auth-link-row">
+                    <button type="button" id="forgot-password-btn" class="auth-link">Forgot password?</button>
+                </div>
             </form>
 
             <form id="register-form" class="auth-form hidden">
@@ -1231,6 +1234,16 @@ function renderAuthScreen() {
     // Back button
     document.getElementById('auth-back-btn').addEventListener('click', () => {
         showScreen('landing-screen');
+    });
+
+    // Forgot password
+    document.getElementById('forgot-password-btn').addEventListener('click', () => {
+        clearAuthError();
+        renderResetRequestScreen();
+        // Carry over whatever they already typed so they don't retype it.
+        const typed = document.getElementById('login-email').value.trim();
+        if (typed) document.getElementById('reset-email').value = typed;
+        showScreen('reset-screen');
     });
 
     // Tab switching
@@ -1432,6 +1445,215 @@ async function resendConfirmationEmail() {
         logError('auth.js:resendConfirmationEmail', err.message, { email, stack: err.stack });
         return { error: 'Failed to resend email. Please try again.' };
     }
+}
+
+// ── Password Reset ────────────────────────────────────────────────
+
+// Supabase consumes the recovery hash on client init, so the raw URL must be
+// read before initSupabase() runs. bootAuth() captures these at startup.
+let _recoveryRequested = false;
+let _recoveryUrlError = null;
+
+function readRecoveryStateFromUrl() {
+    const raw = (window.location.hash || '').replace(/^#/, '') + '&' +
+                (window.location.search || '').replace(/^\?/, '');
+    const params = new URLSearchParams(raw);
+
+    if (params.get('error')) {
+        const code = params.get('error_code') || '';
+        _recoveryUrlError = code === 'otp_expired'
+            ? 'This reset link has expired. Request a new one below.'
+            : (params.get('error_description') || 'This reset link is no longer valid.').replace(/\+/g, ' ');
+        return;
+    }
+    if (params.get('type') === 'recovery') {
+        _recoveryRequested = true;
+    }
+}
+
+// Strip auth tokens from the address bar so a refresh can't replay the flow.
+function clearRecoveryUrl() {
+    try {
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+    } catch (_) { /* non-fatal */ }
+}
+
+async function requestPasswordReset(email) {
+    if (!supabaseClient) return { error: 'Service unavailable. Please try again later.' };
+    try {
+        const redirectTo = window.location.origin + window.location.pathname;
+        const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
+        if (error) {
+            logError('auth.js:requestPasswordReset', error.message, { email });
+            // Deliberately not surfaced: a per-address error would reveal
+            // whether an account exists. Caller always reports success.
+        }
+        return { success: true };
+    } catch (err) {
+        logError('auth.js:requestPasswordReset', err.message, { email, stack: err.stack });
+        return { success: true };
+    }
+}
+
+async function updatePassword(newPassword) {
+    if (!supabaseClient) return { error: 'Service unavailable. Please try again later.' };
+    try {
+        // The recovery link establishes a session; without one there is nothing
+        // to update, which means the link was never valid or has been consumed.
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (!session) {
+            return { error: 'Your reset link has expired. Request a new one to continue.' };
+        }
+        const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
+        if (error) {
+            logError('auth.js:updatePassword', error.message);
+            return { error: error.message };
+        }
+        return { success: true };
+    } catch (err) {
+        logError('auth.js:updatePassword', err.message, { stack: err.stack });
+        return { error: 'Could not update your password. Please try again.' };
+    }
+}
+
+// ── Password Reset UI ─────────────────────────────────────────────
+
+function renderResetRequestScreen(prefillError) {
+    const screen = document.getElementById('reset-screen');
+    if (!screen) return;
+    screen.innerHTML = `
+        <div class="auth-header">
+            <button id="reset-back-btn" class="back-btn" title="Back to sign in">&#x2190;</button>
+            <h1>Reset Password</h1>
+            <p>We'll email you a link to set a new password</p>
+        </div>
+        <div class="auth-card">
+            <div id="reset-error" class="auth-error ${prefillError ? '' : 'hidden'}">${escapeHtml(prefillError || '')}</div>
+            <form id="reset-request-form" class="auth-form">
+                <input type="email" id="reset-email" placeholder="Email" required autocomplete="email">
+                <button type="submit">Send Reset Link</button>
+            </form>
+        </div>
+    `;
+
+    document.getElementById('reset-back-btn').addEventListener('click', () => {
+        showScreen('auth-screen');
+    });
+
+    document.getElementById('reset-request-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = e.target.querySelector('button');
+        btn.disabled = true;
+        btn.textContent = 'Sending...';
+
+        const email = document.getElementById('reset-email').value.trim();
+        await requestPasswordReset(email);
+
+        // Always the same outcome, sent or not — see requestPasswordReset().
+        renderResetSentScreen(email);
+    });
+}
+
+function renderResetSentScreen(email) {
+    const screen = document.getElementById('reset-screen');
+    if (!screen) return;
+    screen.innerHTML = `
+        <div class="confirm-container">
+            <div class="confirm-icon">&#x2709;</div>
+            <h1>Check Your Email</h1>
+            <div class="confirm-card">
+                <p class="confirm-lead">
+                    If an account exists for<br>
+                    <strong>${escapeHtml(email)}</strong><br>
+                    we've sent it a password reset link.
+                </p>
+                <div class="confirm-steps">
+                    <div class="confirm-step">
+                        <span class="confirm-step-num">1</span>
+                        <span>Open the email from <strong>The Waiting Game</strong></span>
+                    </div>
+                    <div class="confirm-step">
+                        <span class="confirm-step-num">2</span>
+                        <span>Click the <strong>Reset password</strong> link</span>
+                    </div>
+                    <div class="confirm-step">
+                        <span class="confirm-step-num">3</span>
+                        <span>Choose a new password and you're back in!</span>
+                    </div>
+                </div>
+                <div class="confirm-note">
+                    <strong>Don't see it?</strong> Check your spam or junk folder.
+                    The email comes from <em>noreply@mail.app.supabase.io</em> on behalf of The Waiting Game.
+                    The link expires after one hour.
+                </div>
+                <button id="reset-sent-signin-btn">Back to Sign In</button>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('reset-sent-signin-btn').addEventListener('click', () => {
+        showScreen('auth-screen');
+    });
+}
+
+function renderResetPasswordScreen() {
+    const screen = document.getElementById('reset-screen');
+    if (!screen) return;
+    screen.innerHTML = `
+        <div class="auth-header">
+            <h1>Choose a New Password</h1>
+            <p>Almost there — pick a password and you're back in the game</p>
+        </div>
+        <div class="auth-card">
+            <div id="reset-error" class="auth-error hidden"></div>
+            <form id="reset-password-form" class="auth-form">
+                <input type="password" id="reset-new-password" placeholder="New password (min 6 characters)"
+                       minlength="6" required autocomplete="new-password">
+                <input type="password" id="reset-confirm-password" placeholder="Confirm new password"
+                       minlength="6" required autocomplete="new-password">
+                <button type="submit">Update Password</button>
+            </form>
+        </div>
+    `;
+
+    document.getElementById('reset-password-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = e.target.querySelector('button');
+        const errEl = document.getElementById('reset-error');
+        errEl.classList.add('hidden');
+
+        const password = document.getElementById('reset-new-password').value;
+        const confirm = document.getElementById('reset-confirm-password').value;
+
+        if (password !== confirm) {
+            errEl.textContent = 'Those passwords don\'t match. Please re-enter them.';
+            errEl.classList.remove('hidden');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Updating...';
+
+        const result = await updatePassword(password);
+
+        if (result.error) {
+            errEl.textContent = result.error;
+            errEl.classList.remove('hidden');
+            btn.disabled = false;
+            btn.textContent = 'Update Password';
+            return;
+        }
+
+        // updateUser leaves the recovery session signed in, so go straight in.
+        clearRecoveryUrl();
+        const user = await checkSession();
+        if (user) {
+            await onAuthSuccess();
+        } else {
+            showAuthError('Password updated. Please sign in with your new password.');
+            showScreen('auth-screen');
+        }
+    });
 }
 
 // ── Account Settings Screen ──────────────────────────────────────
@@ -1640,7 +1862,7 @@ function showScreen(id) {
     if (target) target.classList.remove('hidden');
 
     // Landing page needs scrolling; game screens need overflow:hidden
-    const scrollableScreens = ['landing-screen', 'auth-screen', 'confirm-screen', 'unlock-screen', 'questions-screen', 'account-screen'];
+    const scrollableScreens = ['landing-screen', 'auth-screen', 'confirm-screen', 'reset-screen', 'unlock-screen', 'questions-screen', 'account-screen'];
     if (scrollableScreens.includes(id)) {
         document.body.classList.add('allow-scroll');
         window.scrollTo(0, 0);
@@ -1738,6 +1960,10 @@ function renderUserBadge() {
 
 async function bootAuth() {
     try {
+        // Must run before initSupabase(): creating the client consumes the
+        // recovery hash out of the URL.
+        readRecoveryStateFromUrl();
+
         if (!initSupabase() || !supabaseClient) {
             // SDK failed to load — let the game run without auth
             showScreen('config-screen');
@@ -1749,6 +1975,23 @@ async function bootAuth() {
         renderUnlockScreen();
         renderQuestionsScreen();
         renderAccountScreen();
+
+        // A dead or expired link leaves an error in the URL and no session.
+        if (_recoveryUrlError) {
+            clearRecoveryUrl();
+            renderResetRequestScreen(_recoveryUrlError);
+            showScreen('reset-screen');
+            return;
+        }
+
+        // A recovery link signs the user in, so this must be handled before
+        // checkSession() — otherwise they land on the config screen and never
+        // get the chance to set a password.
+        if (_recoveryRequested) {
+            renderResetPasswordScreen();
+            showScreen('reset-screen');
+            return;
+        }
 
         // Check for existing session
         const user = await checkSession();

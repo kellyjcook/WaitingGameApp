@@ -7,7 +7,7 @@
 3. Click "New Project"
 4. Fill in:
    - **Name**: WaitingGame
-   - **Database Password**: 9kEABmMz2N5BQKos
+   - **Database Password**: use a strong generated password and store it in your password manager — never commit it to the repo
    - **Region**: choose the closest to your users (e.g., US East for East Coast)
 5. Click "Create new project" and wait ~2 minutes for provisioning
 
